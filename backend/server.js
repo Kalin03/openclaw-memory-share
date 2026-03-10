@@ -680,6 +680,94 @@ app.put('/api/user/profile', authMiddleware, (req, res) => {
   }
 });
 
+// Get user statistics
+app.get('/api/user/stats', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // Get user info
+    const user = getOne('SELECT created_at FROM users WHERE id = ?', [userId]);
+    
+    // Calculate days since joined
+    const joinedDate = new Date(user.created_at);
+    const now = new Date();
+    const daysJoined = Math.floor((now - joinedDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    // Get memories count and stats
+    const memories = getAll('SELECT * FROM memories WHERE user_id = ?', [userId]);
+    const memoriesCount = memories.length;
+    
+    // Total likes and bookmarks received
+    const totalLikes = memories.reduce((sum, m) => sum + (m.likes_count || 0), 0);
+    const totalBookmarks = memories.reduce((sum, m) => sum + (m.bookmarks_count || 0), 0);
+    const totalComments = memories.reduce((sum, m) => sum + (m.comments_count || 0), 0);
+
+    // Get bookmarks count (how many the user has bookmarked)
+    const bookmarksCount = getOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId])?.count || 0;
+
+    // Get likes count (how many the user has liked)
+    const likesCount = getOne('SELECT COUNT(*) as count FROM likes WHERE user_id = ?', [userId])?.count || 0;
+
+    // Get comments count (how many the user has commented)
+    const commentsMadeCount = getOne('SELECT COUNT(*) as count FROM comments WHERE user_id = ?', [userId])?.count || 0;
+
+    // Extract and count tags
+    const tagCounts = {};
+    memories.forEach(m => {
+      if (m.tags) {
+        m.tags.split(',').forEach(tag => {
+          const trimmedTag = tag.trim();
+          if (trimmedTag) {
+            tagCounts[trimmedTag] = (tagCounts[trimmedTag] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    // Sort tags by count and get top 5
+    const topTags = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, count]) => ({ name, count }));
+
+    // Most popular memory (by likes)
+    const mostPopularMemory = memories.length > 0 
+      ? memories.reduce((max, m) => (m.likes_count || 0) > (max.likes_count || 0) ? m : max, memories[0])
+      : null;
+
+    // Average stats per memory
+    const avgLikes = memoriesCount > 0 ? (totalLikes / memoriesCount).toFixed(1) : 0;
+    const avgBookmarks = memoriesCount > 0 ? (totalBookmarks / memoriesCount).toFixed(1) : 0;
+
+    // Posting frequency (memories per week)
+    const weeksJoined = Math.max(daysJoined / 7, 1);
+    const postingFrequency = (memoriesCount / weeksJoined).toFixed(1);
+
+    res.json({
+      daysJoined,
+      memoriesCount,
+      totalLikes,
+      totalBookmarks,
+      totalComments,
+      bookmarksCount,
+      likesCount,
+      commentsMadeCount,
+      topTags,
+      mostPopularMemory: mostPopularMemory ? {
+        id: mostPopularMemory.id,
+        title: mostPopularMemory.title,
+        likes_count: mostPopularMemory.likes_count || 0
+      } : null,
+      avgLikes,
+      avgBookmarks,
+      postingFrequency
+    });
+  } catch (error) {
+    console.error('获取用户统计错误:', error);
+    res.status(500).json({ error: '获取用户统计失败' });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

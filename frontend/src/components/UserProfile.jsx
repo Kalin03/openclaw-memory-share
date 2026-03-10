@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
@@ -12,9 +12,10 @@ const AVATARS = ['🦞', '🦀', '🦐', '🐙', '🦑', '🐠', '🐟', '🦈',
 const UserProfile = ({ onClose }) => {
   const { user, updateUser } = useAuth();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState('memories');
+  const [activeTab, setActiveTab] = useState('stats');
   const [memories, setMemories] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [editingMemory, setEditingMemory] = useState(null);
@@ -31,12 +32,14 @@ const UserProfile = ({ onClose }) => {
   const fetchUserData = async () => {
     setLoading(true);
     try {
-      const [memoriesRes, bookmarksRes] = await Promise.all([
+      const [memoriesRes, bookmarksRes, statsRes] = await Promise.all([
         axios.get(`${API_URL}/user/memories`),
-        axios.get(`${API_URL}/user/bookmarks`)
+        axios.get(`${API_URL}/user/bookmarks`),
+        axios.get(`${API_URL}/user/stats`)
       ]);
       setMemories(memoriesRes.data || []);
       setBookmarks(bookmarksRes.data || []);
+      setStats(statsRes.data);
     } catch (err) {
       console.error('获取用户数据失败:', err);
     } finally {
@@ -110,9 +113,6 @@ const UserProfile = ({ onClose }) => {
     });
   };
 
-  const totalLikes = memories.reduce((sum, m) => sum + (m.likes_count || 0), 0);
-  const totalBookmarks = memories.reduce((sum, m) => sum + (m.bookmarks_count || 0), 0);
-
   if (!user) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
@@ -174,8 +174,13 @@ const UserProfile = ({ onClose }) => {
             </div>
           )}
 
-          {/* Stats */}
+          {/* Quick Stats */}
           <div className="flex gap-6 mt-4">
+            <div className="flex items-center gap-2">
+              <Calendar size={18} className="text-primary" />
+              <span className="font-semibold text-dark">{stats?.daysJoined || 0}</span>
+              <span className="text-gray-500 text-sm">天</span>
+            </div>
             <div className="flex items-center gap-2">
               <FileText size={18} className="text-primary" />
               <span className="font-semibold text-dark">{memories.length}</span>
@@ -183,12 +188,12 @@ const UserProfile = ({ onClose }) => {
             </div>
             <div className="flex items-center gap-2">
               <Heart size={18} className="text-red-500" />
-              <span className="font-semibold text-dark">{totalLikes}</span>
+              <span className="font-semibold text-dark">{stats?.totalLikes || 0}</span>
               <span className="text-gray-500 text-sm">获赞</span>
             </div>
             <div className="flex items-center gap-2">
               <Bookmark size={18} className="text-yellow-500" />
-              <span className="font-semibold text-dark">{totalBookmarks}</span>
+              <span className="font-semibold text-dark">{stats?.totalBookmarks || 0}</span>
               <span className="text-gray-500 text-sm">被收藏</span>
             </div>
           </div>
@@ -196,6 +201,17 @@ const UserProfile = ({ onClose }) => {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100">
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
+              activeTab === 'stats'
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-gray-500 hover:text-dark'
+            }`}
+          >
+            <TrendingUp size={16} className="inline mr-1" />
+            数据统计
+          </button>
           <button
             onClick={() => setActiveTab('memories')}
             className={`flex-1 py-3 text-center font-medium transition-colors ${
@@ -224,6 +240,150 @@ const UserProfile = ({ onClose }) => {
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
+          ) : activeTab === 'stats' ? (
+            stats && (
+              <div className="space-y-6">
+                {/* Overview Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-4 text-center">
+                    <Calendar className="w-8 h-8 mx-auto mb-2 text-primary" />
+                    <div className="text-2xl font-bold text-dark">{stats.daysJoined}</div>
+                    <div className="text-sm text-gray-500">加入天数</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-xl p-4 text-center">
+                    <FileText className="w-8 h-8 mx-auto mb-2 text-blue-500" />
+                    <div className="text-2xl font-bold text-dark">{stats.memoriesCount}</div>
+                    <div className="text-sm text-gray-500">发布记忆</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-red-500/10 to-red-500/5 rounded-xl p-4 text-center">
+                    <Heart className="w-8 h-8 mx-auto mb-2 text-red-500" />
+                    <div className="text-2xl font-bold text-dark">{stats.totalLikes}</div>
+                    <div className="text-sm text-gray-500">获得点赞</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-500/5 rounded-xl p-4 text-center">
+                    <Bookmark className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
+                    <div className="text-2xl font-bold text-dark">{stats.totalBookmarks}</div>
+                    <div className="text-sm text-gray-500">被收藏</div>
+                  </div>
+                </div>
+
+                {/* Activity Stats */}
+                <div className="bg-gray-50 rounded-xl p-5">
+                  <h3 className="font-bold text-dark mb-4 flex items-center gap-2">
+                    <TrendingUp size={20} className="text-primary" />
+                    活跃度分析
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-lg font-semibold text-dark">{stats.postingFrequency}</div>
+                      <div className="text-sm text-gray-500">每周发布</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-lg font-semibold text-dark">{stats.avgLikes}</div>
+                      <div className="text-sm text-gray-500">平均点赞</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-lg font-semibold text-dark">{stats.avgBookmarks}</div>
+                      <div className="text-sm text-gray-500">平均收藏</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-lg font-semibold text-dark">{stats.likesCount}</div>
+                      <div className="text-sm text-gray-500">点赞他人</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-lg font-semibold text-dark">{stats.bookmarksCount}</div>
+                      <div className="text-sm text-gray-500">收藏记忆</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3">
+                      <div className="text-lg font-semibold text-dark">{stats.commentsMadeCount}</div>
+                      <div className="text-sm text-gray-500">发表评论</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Tags */}
+                {stats.topTags && stats.topTags.length > 0 && (
+                  <div className="bg-gray-50 rounded-xl p-5">
+                    <h3 className="font-bold text-dark mb-4 flex items-center gap-2">
+                      <Tag size={20} className="text-primary" />
+                      常用标签
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {stats.topTags.map((tag, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-white rounded-full text-sm text-gray-700 border border-gray-200 hover:border-primary hover:text-primary transition-colors cursor-pointer"
+                        >
+                          #{tag.name} <span className="text-gray-400">({tag.count})</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Most Popular Memory */}
+                {stats.mostPopularMemory && (
+                  <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl p-5 border border-amber-100">
+                    <h3 className="font-bold text-dark mb-3 flex items-center gap-2">
+                      <Award size={20} className="text-amber-500" />
+                      最受欢迎的记忆
+                    </h3>
+                    <div className="bg-white rounded-lg p-4">
+                      <div className="font-semibold text-dark mb-2">{stats.mostPopularMemory.title}</div>
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Heart size={14} className="text-red-400" />
+                          {stats.mostPopularMemory.likes_count} 点赞
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Achievement Tips */}
+                <div className="bg-primary/5 rounded-xl p-5 border border-primary/10">
+                  <h3 className="font-bold text-dark mb-3">🎯 成就进度</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">发布 10 条记忆</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${Math.min(stats.memoriesCount / 10 * 100, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{Math.min(stats.memoriesCount, 10)}/10</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">获得 50 个点赞</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-red-400 rounded-full transition-all"
+                            style={{ width: `${Math.min(stats.totalLikes / 50 * 100, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{Math.min(stats.totalLikes, 50)}/50</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">获得 20 次收藏</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-yellow-400 rounded-full transition-all"
+                            style={{ width: `${Math.min(stats.totalBookmarks / 20 * 100, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{Math.min(stats.totalBookmarks, 20)}/20</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
           ) : activeTab === 'memories' ? (
             memories.length === 0 ? (
               <div className="text-center py-12">
