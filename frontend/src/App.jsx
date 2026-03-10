@@ -6,6 +6,7 @@ import AuthModal from './components/AuthModal';
 import CreateMemoryModal from './components/CreateMemoryModal';
 import EditMemoryModal from './components/EditMemoryModal';
 import UserProfile from './components/UserProfile';
+import RandomMemory from './components/RandomMemory';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
@@ -85,6 +86,9 @@ const AppContent = () => {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
+        {/* Random Memory */}
+        {!isSearchMode && <RandomMemory onTagClick={handleTagClick} />}
+        
         {/* Search Results Header */}
         {isSearchMode && (
           <div className="mb-6 flex items-center justify-between">

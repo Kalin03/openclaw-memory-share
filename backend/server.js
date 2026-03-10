@@ -285,6 +285,48 @@ app.get('/api/memories/search', (req, res) => {
   }
 });
 
+// Get random memory (随机回顾)
+app.get('/api/memories/random', (req, res) => {
+  const userId = req.user?.id;
+
+  try {
+    let memory;
+    
+    if (userId) {
+      memory = getOne(`
+        SELECT m.*, u.username, u.avatar,
+          EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
+          EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        ORDER BY RANDOM()
+        LIMIT 1
+      `, [userId, userId]);
+    } else {
+      memory = getOne(`
+        SELECT m.*, u.username, u.avatar
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        ORDER BY RANDOM()
+        LIMIT 1
+      `);
+      if (memory) {
+        memory.is_liked = false;
+        memory.is_bookmarked = false;
+      }
+    }
+
+    if (!memory) {
+      return res.status(404).json({ error: '暂无记忆' });
+    }
+
+    res.json(memory);
+  } catch (error) {
+    console.error('获取随机记忆错误:', error);
+    res.status(500).json({ error: '获取随机记忆失败' });
+  }
+});
+
 // Get all memories (with pagination)
 app.get('/api/memories', (req, res) => {
   const page = parseInt(req.query.page) || 1;
