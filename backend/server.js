@@ -222,6 +222,69 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 
 // ============ Memory Routes ============
 
+// ============ Search Routes ============
+
+// Search memories
+app.get('/api/memories/search', (req, res) => {
+  const { q } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+  const userId = req.user?.id;
+
+  if (!q || q.trim() === '') {
+    return res.status(400).json({ error: '搜索关键词不能为空' });
+  }
+
+  const searchTerm = `%${q.trim()}%`;
+
+  try {
+    let memories;
+    let total;
+
+    if (userId) {
+      memories = getAll(`
+        SELECT m.*, u.username, u.avatar,
+          EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
+          EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?
+        ORDER BY m.created_at DESC
+        LIMIT ? OFFSET ?
+      `, [userId, userId, searchTerm, searchTerm, searchTerm, limit, offset]);
+      const totalResult = getOne('SELECT COUNT(*) as count FROM memories WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?', [searchTerm, searchTerm, searchTerm]);
+      total = totalResult.count;
+    } else {
+      memories = getAll(`
+        SELECT m.*, u.username, u.avatar
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?
+        ORDER BY m.created_at DESC
+        LIMIT ? OFFSET ?
+      `, [searchTerm, searchTerm, searchTerm, limit, offset]);
+      memories = memories.map(m => ({ ...m, is_liked: false, is_bookmarked: false }));
+      const totalResult = getOne('SELECT COUNT(*) as count FROM memories WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?', [searchTerm, searchTerm, searchTerm]);
+      total = totalResult.count;
+    }
+
+    res.json({
+      memories,
+      query: q,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('搜索错误:', error);
+    res.status(500).json({ error: '搜索失败' });
+  }
+});
+
 // Get all memories (with pagination)
 app.get('/api/memories', (req, res) => {
   const page = parseInt(req.query.page) || 1;
