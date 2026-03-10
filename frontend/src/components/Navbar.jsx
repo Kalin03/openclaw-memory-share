@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User, Plus, Search, X } from 'lucide-react';
 
-const Navbar = ({ onAuthClick, onCreateClick, onSearch }) => {
+const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
   const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -69,7 +69,7 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch }) => {
                   <span className="hidden sm:inline">分享记忆</span>
                 </button>
                 
-                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors" onClick={onProfileClick}>
                   <span className="text-xl">{user.avatar || '🦞'}</span>
                   <span className="font-medium text-dark hidden sm:inline">{user.username}</span>
                 </div>

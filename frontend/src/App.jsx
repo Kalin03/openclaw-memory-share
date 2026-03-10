@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import MemoryCard from './components/MemoryCard';
 import AuthModal from './components/AuthModal';
 import CreateMemoryModal from './components/CreateMemoryModal';
+import UserProfile from './components/UserProfile';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
@@ -12,6 +13,7 @@ const AppContent = () => {
   const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory } = useMemories();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
     fetchMemories(1);
@@ -53,6 +55,7 @@ const AppContent = () => {
         onAuthClick={() => setShowAuthModal(true)}
         onCreateClick={() => setShowCreateModal(true)}
         onSearch={handleSearch}
+        onProfileClick={() => setShowProfileModal(true)}
       />
 
       {/* Hero Section */}
@@ -167,6 +170,7 @@ const AppContent = () => {
       {/* Modals */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
       {showCreateModal && <CreateMemoryModal onClose={() => setShowCreateModal(false)} />}
+      {showProfileModal && <UserProfile onClose={() => setShowProfileModal(false)} />}
     </div>
   );
 };
