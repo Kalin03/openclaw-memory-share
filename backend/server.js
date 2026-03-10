@@ -327,6 +327,81 @@ app.get('/api/memories/random', (req, res) => {
   }
 });
 
+// Get hot memories (热门记忆 - 按热度排序)
+app.get('/api/memories/hot', (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+  const userId = req.user?.id;
+
+  try {
+    let memories;
+    let total;
+
+    // 热度算法：likes * 3 + bookmarks * 2 + comments * 1
+    // 加上时间衰减因子（7天内加权，超过7天逐渐衰减）
+    if (userId) {
+      memories = getAll(`
+        SELECT m.*, u.username, u.avatar,
+          EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
+          EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked,
+          (
+            (m.likes_count * 3 + m.bookmarks_count * 2 + m.comments_count * 1) *
+            CASE 
+              WHEN julianday('now') - julianday(m.created_at) <= 1 THEN 1.5
+              WHEN julianday('now') - julianday(m.created_at) <= 3 THEN 1.3
+              WHEN julianday('now') - julianday(m.created_at) <= 7 THEN 1.1
+              WHEN julianday('now') - julianday(m.created_at) <= 30 THEN 1.0
+              ELSE 0.8
+            END
+          ) as hot_score
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        ORDER BY hot_score DESC, m.created_at DESC
+        LIMIT ? OFFSET ?
+      `, [userId, userId, limit, offset]);
+      const totalResult = getOne('SELECT COUNT(*) as count FROM memories');
+      total = totalResult.count;
+    } else {
+      memories = getAll(`
+        SELECT m.*, u.username, u.avatar,
+          0 as is_liked,
+          0 as is_bookmarked,
+          (
+            (m.likes_count * 3 + m.bookmarks_count * 2 + m.comments_count * 1) *
+            CASE 
+              WHEN julianday('now') - julianday(m.created_at) <= 1 THEN 1.5
+              WHEN julianday('now') - julianday(m.created_at) <= 3 THEN 1.3
+              WHEN julianday('now') - julianday(m.created_at) <= 7 THEN 1.1
+              WHEN julianday('now') - julianday(m.created_at) <= 30 THEN 1.0
+              ELSE 0.8
+            END
+          ) as hot_score
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        ORDER BY hot_score DESC, m.created_at DESC
+        LIMIT ? OFFSET ?
+      `, [limit, offset]);
+      memories = memories.map(m => ({ ...m, is_liked: false, is_bookmarked: false }));
+      const totalResult = getOne('SELECT COUNT(*) as count FROM memories');
+      total = totalResult.count;
+    }
+
+    res.json({
+      memories,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取热门记忆错误:', error);
+    res.status(500).json({ error: '获取热门记忆失败' });
+  }
+});
+
 // Get all memories (with pagination)
 app.get('/api/memories', (req, res) => {
   const page = parseInt(req.query.page) || 1;

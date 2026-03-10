@@ -10,15 +10,16 @@ import RandomMemory from './components/RandomMemory';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Clock, Flame } from 'lucide-react';
 
 const AppContent = () => {
   const { loading: authLoading } = useAuth();
-  const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory } = useMemories();
+  const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory, fetchHotMemories } = useMemories();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editingMemory, setEditingMemory] = useState(null);
+  const [activeTab, setActiveTab] = useState('latest'); // 'latest' or 'hot'
 
   useEffect(() => {
     fetchMemories(1);
@@ -46,11 +47,22 @@ const AppContent = () => {
     searchMemories(tag, 1);
   };
 
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'latest') {
+      fetchMemories(1);
+    } else {
+      fetchHotMemories(1);
+    }
+  };
+
   const handlePageChange = (newPage) => {
     if (isSearchMode) {
       searchMemories(searchQuery, newPage);
-    } else {
+    } else if (activeTab === 'latest') {
       fetchMemories(newPage);
+    } else {
+      fetchHotMemories(newPage);
     }
   };
 
@@ -88,6 +100,34 @@ const AppContent = () => {
       <main className="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
         {/* Random Memory */}
         {!isSearchMode && <RandomMemory onTagClick={handleTagClick} />}
+        
+        {/* Tab Switcher */}
+        {!isSearchMode && (
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => handleTabChange('latest')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                activeTab === 'latest'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              <Clock size={18} />
+              最新
+            </button>
+            <button
+              onClick={() => handleTabChange('hot')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                activeTab === 'hot'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md'
+                  : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              <Flame size={18} />
+              热门
+            </button>
+          </div>
+        )}
         
         {/* Search Results Header */}
         {isSearchMode && (
