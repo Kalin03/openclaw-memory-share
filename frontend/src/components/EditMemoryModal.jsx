@@ -5,7 +5,7 @@ import { X, FileText, Tag } from 'lucide-react';
 
 const EditMemoryModal = ({ memory, onClose }) => {
   const { updateMemory } = useMemories();
-  const { showToast } = useToast();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: memory?.title || '',
@@ -34,10 +34,10 @@ const EditMemoryModal = ({ memory, onClose }) => {
         content: formData.content,
         tags
       });
-      showToast('记忆更新成功！', 'success');
+      toast.success('记忆更新成功！');
       onClose();
     } catch (error) {
-      showToast('更新失败，请重试', 'error');
+      toast.error('更新失败，请重试');
     } finally {
       setLoading(false);
     }
