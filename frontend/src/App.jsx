@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import MemoryCard from './components/MemoryCard';
+import MemoryCardSkeleton from './components/MemoryCardSkeleton';
 import AuthModal from './components/AuthModal';
 import CreateMemoryModal from './components/CreateMemoryModal';
 import EditMemoryModal from './components/EditMemoryModal';
@@ -8,7 +9,7 @@ import UserProfile from './components/UserProfile';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
-import { ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 const AppContent = () => {
   const { loading: authLoading } = useAuth();
@@ -101,8 +102,10 @@ const AppContent = () => {
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="grid gap-6 md:grid-cols-2">
+            {[...Array(4)].map((_, i) => (
+              <MemoryCardSkeleton key={i} />
+            ))}
           </div>
         ) : memories.length === 0 ? (
           <div className="text-center py-12">
