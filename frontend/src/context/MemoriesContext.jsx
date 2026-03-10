@@ -68,6 +68,16 @@ export const MemoriesProvider = ({ children }) => {
     }
   };
 
+  const updateMemory = async (id, data) => {
+    const res = await axios.put(`${API_URL}/memories/${id}`, data);
+    if (isSearchMode) {
+      searchMemories(searchQuery, page);
+    } else {
+      fetchMemories(page);
+    }
+    return res.data.memory;
+  };
+
   const toggleLike = async (id) => {
     const res = await axios.post(`${API_URL}/memories/${id}/like`);
     if (isSearchMode) {
@@ -91,7 +101,7 @@ export const MemoriesProvider = ({ children }) => {
   return (
     <MemoriesContext.Provider value={{
       memories, loading, page, totalPages, searchQuery, isSearchMode,
-      fetchMemories, searchMemories, createMemory, deleteMemory, toggleLike, toggleBookmark
+      fetchMemories, searchMemories, createMemory, updateMemory, deleteMemory, toggleLike, toggleBookmark
     }}>
       {children}
     </MemoriesContext.Provider>

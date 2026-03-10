@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import MemoryCard from './components/MemoryCard';
 import AuthModal from './components/AuthModal';
 import CreateMemoryModal from './components/CreateMemoryModal';
+import EditMemoryModal from './components/EditMemoryModal';
 import UserProfile from './components/UserProfile';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -15,6 +16,7 @@ const AppContent = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingMemory, setEditingMemory] = useState(null);
 
   useEffect(() => {
     fetchMemories(1);
@@ -24,6 +26,10 @@ const AppContent = () => {
     if (window.confirm('确定要删除这条记忆吗？')) {
       await deleteMemory(id);
     }
+  };
+
+  const handleEdit = (memory) => {
+    setEditingMemory(memory);
   };
 
   const handleSearch = (query) => {
@@ -127,6 +133,7 @@ const AppContent = () => {
                   key={memory.id} 
                   memory={memory}
                   onDelete={handleDelete}
+                  onEdit={handleEdit}
                   onTagClick={handleTagClick}
                 />
               ))}
@@ -176,6 +183,7 @@ const AppContent = () => {
       {/* Modals */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
       {showCreateModal && <CreateMemoryModal onClose={() => setShowCreateModal(false)} />}
+      {editingMemory && <EditMemoryModal memory={editingMemory} onClose={() => setEditingMemory(null)} />}
       {showProfileModal && <UserProfile onClose={() => setShowProfileModal(false)} />}
     </div>
   );

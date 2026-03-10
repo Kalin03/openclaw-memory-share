@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
 
 const API_URL = '/api';
 
-const MemoryCard = ({ memory, onDelete, onTagClick }) => {
+const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
   const { user } = useAuth();
   const toast = useToast();
   const [isLiked, setIsLiked] = useState(memory.is_liked);
@@ -152,13 +152,22 @@ const MemoryCard = ({ memory, onDelete, onTagClick }) => {
           </button>
           
           {user?.id === memory.user_id && (
-            <button
-              onClick={() => onDelete(memory.id)}
-              className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
-              title="删除"
-            >
-              <Trash2 size={18} />
-            </button>
+            <>
+              <button
+                onClick={() => onEdit && onEdit(memory)}
+                className="p-2 rounded-lg hover:bg-blue-50 text-gray-500 hover:text-blue-500 transition-colors"
+                title="编辑"
+              >
+                <Edit2 size={18} />
+              </button>
+              <button
+                onClick={() => onDelete(memory.id)}
+                className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
+                title="删除"
+              >
+                <Trash2 size={18} />
+              </button>
+            </>
           )}
         </div>
       </div>
