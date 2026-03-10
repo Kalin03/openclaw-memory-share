@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const API_URL = '/api';
 
-const MemoryCard = ({ memory, onDelete }) => {
+const MemoryCard = ({ memory, onDelete, onTagClick }) => {
   const { user } = useAuth();
   const [isLiked, setIsLiked] = useState(memory.is_liked);
   const [isBookmarked, setIsBookmarked] = useState(memory.is_bookmarked);
@@ -165,7 +165,13 @@ const MemoryCard = ({ memory, onDelete }) => {
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {tags.map((tag, index) => (
-            <span key={index} className="tag">{tag}</span>
+            <button
+              key={index}
+              onClick={() => onTagClick && onTagClick(tag)}
+              className="tag hover:bg-primary/20 hover:text-primary cursor-pointer transition-colors"
+            >
+              #{tag}
+            </button>
           ))}
         </div>
       )}

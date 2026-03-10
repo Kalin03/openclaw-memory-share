@@ -33,6 +33,10 @@ const AppContent = () => {
     }
   };
 
+  const handleTagClick = (tag) => {
+    searchMemories(tag, 1);
+  };
+
   const handlePageChange = (newPage) => {
     if (isSearchMode) {
       searchMemories(searchQuery, newPage);
@@ -122,6 +126,7 @@ const AppContent = () => {
                   key={memory.id} 
                   memory={memory}
                   onDelete={handleDelete}
+                  onTagClick={handleTagClick}
                 />
               ))}
             </div>
