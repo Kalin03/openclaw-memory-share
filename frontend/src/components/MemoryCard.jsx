@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import axios from 'axios';
 
 const API_URL = '/api';
 
 const MemoryCard = ({ memory, onDelete, onTagClick }) => {
   const { user } = useAuth();
+  const toast = useToast();
   const [isLiked, setIsLiked] = useState(memory.is_liked);
   const [isBookmarked, setIsBookmarked] = useState(memory.is_bookmarked);
   const [likesCount, setLikesCount] = useState(memory.likes_count);
@@ -40,35 +42,43 @@ const MemoryCard = ({ memory, onDelete, onTagClick }) => {
           setShowToast(false);
         }, 2000);
       } else {
-        alert('复制失败，请手动选择文本复制');
+        toast.error('复制失败，请手动选择文本复制');
       }
     } catch (err) {
       console.error('复制失败:', err);
-      alert('复制失败，请手动选择文本复制');
+      toast.error('复制失败，请手动选择文本复制');
     }
     
     document.body.removeChild(textArea);
   };
 
   const handleLike = async () => {
-    if (!user) return alert('请先登录');
+    if (!user) {
+      toast.warning('请先登录');
+      return;
+    }
     try {
       const res = await axios.post(`${API_URL}/memories/${memory.id}/like`);
       setIsLiked(res.data.liked);
       setLikesCount(prev => res.data.liked ? prev + 1 : prev - 1);
     } catch (err) {
       console.error('点赞失败:', err);
+      toast.error('点赞失败');
     }
   };
 
   const handleBookmark = async () => {
-    if (!user) return alert('请先登录');
+    if (!user) {
+      toast.warning('请先登录');
+      return;
+    }
     try {
       const res = await axios.post(`${API_URL}/memories/${memory.id}/bookmark`);
       setIsBookmarked(res.data.bookmarked);
       setBookmarksCount(prev => res.data.bookmarked ? prev + 1 : prev - 1);
     } catch (err) {
       console.error('收藏失败:', err);
+      toast.error('收藏失败');
     }
   };
 

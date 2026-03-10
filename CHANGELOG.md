@@ -1,5 +1,17 @@
 # 更新日志
 
+## [v1.4.0] - 2026-03-10
+
+### 新增功能
+- **Toast 通知系统** - 替换 alert 弹窗，提升用户体验
+  - 新增 ToastContext 和 ToastProvider
+  - 支持 success/error/info/warning 四种类型
+  - 自动消失动画效果
+  - 点击可手动关闭
+  - 更新 MemoryCard 和 UserProfile 使用 toast 替代 alert
+
+---
+
 ## [v1.3.0] - 2026-03-10
 
 ### 新增功能

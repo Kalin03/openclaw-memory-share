@@ -6,6 +6,7 @@ import CreateMemoryModal from './components/CreateMemoryModal';
 import UserProfile from './components/UserProfile';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
+import { ToastProvider } from './context/ToastContext';
 import { ChevronLeft, ChevronRight, Loader2, Search } from 'lucide-react';
 
 const AppContent = () => {
@@ -184,7 +185,9 @@ const App = () => {
   return (
     <AuthProvider>
       <MemoriesProvider>
-        <AppContent />
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
       </MemoriesProvider>
     </AuthProvider>
   );

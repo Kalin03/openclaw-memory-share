@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
 import axios from 'axios';
 
@@ -10,6 +11,7 @@ const AVATARS = ['🦞', '🦀', '🦐', '🐙', '🦑', '🐠', '🐟', '🦈',
 
 const UserProfile = ({ onClose }) => {
   const { user, updateUser } = useAuth();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState('memories');
   const [memories, setMemories] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
@@ -58,9 +60,10 @@ const UserProfile = ({ onClose }) => {
     try {
       await axios.delete(`${API_URL}/memories/${id}`);
       setMemories(memories.filter(m => m.id !== id));
+      toast.success('删除成功');
     } catch (err) {
       console.error('删除失败:', err);
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 
@@ -73,7 +76,7 @@ const UserProfile = ({ onClose }) => {
 
   const handleSaveEdit = async () => {
     if (!editTitle.trim() || !editContent.trim()) {
-      alert('标题和内容不能为空');
+      toast.warning('标题和内容不能为空');
       return;
     }
 
@@ -85,9 +88,10 @@ const UserProfile = ({ onClose }) => {
       });
       setMemories(memories.map(m => m.id === editingMemory.id ? res.data.memory : m));
       setEditingMemory(null);
+      toast.success('更新成功');
     } catch (err) {
       console.error('更新失败:', err);
-      alert('更新失败');
+      toast.error('更新失败');
     }
   };
 
