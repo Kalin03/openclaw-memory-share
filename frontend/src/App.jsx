@@ -32,8 +32,8 @@ const AppContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-light">
-      <Navbar 
+    <div className="min-h-screen bg-light flex flex-col">
+      <Navbar
         onAuthClick={() => setShowAuthModal(true)}
         onCreateClick={() => setShowCreateModal(true)}
       />
@@ -52,7 +52,7 @@ const AppContent = () => {
       </div>
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
