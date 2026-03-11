@@ -200,6 +200,20 @@ async function initDB() {
     )
   `);
 
+  // 创建举报表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id TEXT PRIMARY KEY,
+      reporter_id TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   saveDB();
 }
 
@@ -227,6 +241,21 @@ const authMiddleware = (req, res, next) => {
   } catch (error) {
     return res.status(401).json({ error: 'Token无效或已过期' });
   }
+};
+
+// Optional auth middleware - 不会阻止请求，但如果提供了token则解析用户信息
+const optionalAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+    } catch (error) {
+      // Token无效，但不阻止请求
+      req.user = null;
+    }
+  }
+  next();
 };
 
 // Helper functions for sql.js (since it doesn't have parameterized queries like better-sqlite3)
@@ -564,7 +593,7 @@ app.get('/api/memories/hot', (req, res) => {
 });
 
 // Get all memories (with pagination)
-app.get('/api/memories', (req, res) => {
+app.get('/api/memories', optionalAuth, (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
@@ -672,7 +701,7 @@ app.get('/api/memories/following', authMiddleware, (req, res) => {
 });
 
 // Get single memory
-app.get('/api/memories/:id', (req, res) => {
+app.get('/api/memories/:id', optionalAuth, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
 
@@ -1987,6 +2016,86 @@ app.get('/api/memories/:id/series', (req, res) => {
     res.json({ series });
   } catch (error) {
     console.error('获取记忆所属系列错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// ============ Report Routes ============
+
+// 举报内容
+app.post('/api/reports', authMiddleware, (req, res) => {
+  const { targetType, targetId, reason, description } = req.body;
+  const reporterId = req.user.id;
+
+  if (!targetType || !targetId || !reason) {
+    return res.status(400).json({ error: '请填写完整的举报信息' });
+  }
+
+  if (!['memory', 'comment', 'user'].includes(targetType)) {
+    return res.status(400).json({ error: '无效的举报类型' });
+  }
+
+  try {
+    // 检查目标是否存在
+    let targetExists = false;
+    if (targetType === 'memory') {
+      targetExists = !!getOne('SELECT id FROM memories WHERE id = ?', [targetId]);
+    } else if (targetType === 'comment') {
+      targetExists = !!getOne('SELECT id FROM comments WHERE id = ?', [targetId]);
+    } else if (targetType === 'user') {
+      targetExists = !!getOne('SELECT id FROM users WHERE id = ?', [targetId]);
+    }
+
+    if (!targetExists) {
+      return res.status(404).json({ error: '举报目标不存在' });
+    }
+
+    // 检查是否已举报过
+    const existingReport = getOne(
+      'SELECT * FROM reports WHERE reporter_id = ? AND target_type = ? AND target_id = ?',
+      [reporterId, targetType, targetId]
+    );
+
+    if (existingReport) {
+      return res.status(400).json({ error: '您已举报过此内容' });
+    }
+
+    // 创建举报
+    const reportId = uuidv4();
+    runQuery(
+      'INSERT INTO reports (id, reporter_id, target_type, target_id, reason, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [reportId, reporterId, targetType, targetId, reason, description || null]
+    );
+
+    res.status(201).json({ message: '举报已提交，我们会尽快处理', reportId });
+  } catch (error) {
+    console.error('举报错误:', error);
+    res.status(500).json({ error: '举报失败' });
+  }
+});
+
+// 获取举报列表（管理员功能，暂时简化）
+app.get('/api/reports', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const status = req.query.status || 'all';
+
+  try {
+    // 获取用户自己的举报记录
+    let query = 'SELECT * FROM reports WHERE reporter_id = ?';
+    const params = [userId];
+
+    if (status !== 'all') {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const reports = getAll(query, params);
+
+    res.json({ reports });
+  } catch (error) {
+    console.error('获取举报列表错误:', error);
     res.status(500).json({ error: '获取失败' });
   }
 });
