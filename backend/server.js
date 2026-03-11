@@ -1168,6 +1168,74 @@ app.put('/api/user/profile', authMiddleware, (req, res) => {
   }
 });
 
+// Change password (用户修改自己的密码)
+app.put('/api/user/password', authMiddleware, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const userId = req.user.id;
+
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: '旧密码和新密码都是必填项' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: '新密码至少需要6个字符' });
+  }
+
+  try {
+    const user = getOne('SELECT password_hash FROM users WHERE id = ?', [userId]);
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const isValid = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: '旧密码错误' });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    runQuery('UPDATE users SET password_hash = ? WHERE id = ?', [newPasswordHash, userId]);
+
+    res.json({ message: '密码修改成功' });
+  } catch (error) {
+    console.error('修改密码错误:', error);
+    res.status(500).json({ error: '修改密码失败' });
+  }
+});
+
+// Admin reset password (管理员重置密码)
+app.post('/api/admin/reset-password', async (req, res) => {
+  const { adminKey, username, newPassword } = req.body;
+
+  // 验证管理员密钥
+  const ADMIN_KEY = process.env.ADMIN_KEY || 'openclaw-admin-2024';
+  if (adminKey !== ADMIN_KEY) {
+    return res.status(403).json({ error: '无权限' });
+  }
+
+  if (!username || !newPassword) {
+    return res.status(400).json({ error: '用户名和新密码都是必填项' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: '新密码至少需要6个字符' });
+  }
+
+  try {
+    const user = getOne('SELECT id FROM users WHERE username = ?', [username]);
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    runQuery('UPDATE users SET password_hash = ? WHERE username = ?', [newPasswordHash, username]);
+
+    res.json({ message: '密码重置成功', username });
+  } catch (error) {
+    console.error('重置密码错误:', error);
+    res.status(500).json({ error: '重置密码失败' });
+  }
+});
+
 // Get user statistics
 app.get('/api/user/stats', authMiddleware, (req, res) => {
   const userId = req.user.id;
