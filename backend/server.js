@@ -182,6 +182,14 @@ db.exec(`
   );
 `);
 
+// 添加 deleted_at 字段（回收站功能）
+try {
+  db.exec(`ALTER TABLE memories ADD COLUMN deleted_at DATETIME DEFAULT NULL`);
+  console.log('✅ Added deleted_at column to memories table');
+} catch (e) {
+  // 字段已存在，忽略错误
+}
+
 console.log('✅ Database initialized at:', DB_PATH);
 
 // Auth middleware
@@ -294,14 +302,14 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 app.get('/api/memories', optionalAuth, (req, res) => {
   const { tag, search, userId } = req.query;
   let sql = `
-    SELECT m.*, u.username, u.avatar, 
+    SELECT m.*, u.username, u.avatar,
       (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
       (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
       (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count
     FROM memories m
     JOIN users u ON m.user_id = u.id
   `;
-  const conditions = [];
+  const conditions = ['m.deleted_at IS NULL'];
   const params = [];
 
   // 可见性过滤
@@ -390,7 +398,7 @@ app.post('/api/memories', authMiddleware, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(memoryId, userId, title, content, tags || '', visibility || 'public');
 
-    const memory = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
     res.status(201).json(memory);
   } catch (error) {
     console.error('创建记忆错误:', error);
@@ -405,7 +413,7 @@ app.put('/api/memories/:id', authMiddleware, (req, res) => {
   const userId = req.user.id;
 
   try {
-    const memory = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
     if (!memory) {
       return res.status(404).json({ error: '记忆不存在' });
     }
@@ -427,13 +435,13 @@ app.put('/api/memories/:id', authMiddleware, (req, res) => {
   }
 });
 
-// Delete memory
+// Delete memory (soft delete - move to trash)
 app.delete('/api/memories/:id', authMiddleware, (req, res) => {
   const memoryId = req.params.id;
   const userId = req.user.id;
 
   try {
-    const memory = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
     if (!memory) {
       return res.status(404).json({ error: '记忆不存在' });
     }
@@ -442,13 +450,10 @@ app.delete('/api/memories/:id', authMiddleware, (req, res) => {
       return res.status(403).json({ error: '无权删除此记忆' });
     }
 
-    // 删除相关数据
-    db.prepare('DELETE FROM likes WHERE memory_id = ?').run(memoryId);
-    db.prepare('DELETE FROM bookmarks WHERE memory_id = ?').run(memoryId);
-    db.prepare('DELETE FROM comments WHERE memory_id = ?').run(memoryId);
-    db.prepare('DELETE FROM memories WHERE id = ?').run(memoryId);
+    // 软删除：设置 deleted_at
+    db.prepare('UPDATE memories SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?').run(memoryId);
 
-    res.json({ message: '删除成功' });
+    res.json({ message: '已移至回收站', deletedAt: new Date().toISOString() });
   } catch (error) {
     console.error('删除记忆错误:', error);
     res.status(500).json({ error: '删除记忆失败' });
@@ -595,7 +600,7 @@ app.post('/api/memories/:id/comments', authMiddleware, (req, res) => {
     }
 
     // 获取记忆信息和评论者信息
-    const memory = db.prepare('SELECT m.*, u.username as author_name FROM memories m JOIN users u ON m.user_id = u.id WHERE m.id = ?').get(memoryId);
+    const memory = db.prepare('SELECT m.*, u.username as author_name FROM memories m JOIN users u ON m.user_id = u.id WHERE m.id = ? AND m.deleted_at IS NULL').get(memoryId);
     const commenter = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
 
     // 为每个被@的用户发送通知
@@ -774,8 +779,8 @@ app.get('/api/user/:id', (req, res) => {
     // 获取用户统计
     const stats = db.prepare(`
       SELECT
-        (SELECT COUNT(*) FROM memories WHERE user_id = ?) as memories_count,
-        (SELECT COUNT(*) FROM likes WHERE memory_id IN (SELECT id FROM memories WHERE user_id = ?)) as total_likes,
+        (SELECT COUNT(*) FROM memories WHERE user_id = ? AND deleted_at IS NULL) as memories_count,
+        (SELECT COUNT(*) FROM likes WHERE memory_id IN (SELECT id FROM memories WHERE user_id = ? AND deleted_at IS NULL)) as total_likes,
         (SELECT COUNT(*) FROM follows WHERE following_id = ?) as followers_count,
         (SELECT COUNT(*) FROM follows WHERE follower_id = ?) as following_count
     `).get(user.id, user.id, user.id, user.id);
@@ -794,7 +799,7 @@ app.get('/api/user/:id/memories', optionalAuth, (req, res) => {
       SELECT m.*, u.username, u.avatar
       FROM memories m
       JOIN users u ON m.user_id = u.id
-      WHERE m.user_id = ?
+      WHERE m.user_id = ? AND m.deleted_at IS NULL
     `;
     const params = [req.params.id];
 
@@ -903,7 +908,7 @@ app.get('/api/user/stats', authMiddleware, (req, res) => {
 
     const stats = db.prepare(`
       SELECT
-        (SELECT COUNT(*) FROM memories WHERE user_id = ?) as memories_count,
+        (SELECT COUNT(*) FROM memories WHERE user_id = ? AND deleted_at IS NULL) as memories_count,
         (SELECT COUNT(*) FROM bookmarks WHERE user_id = ?) as bookmarks_count,
         (SELECT COUNT(*) FROM likes WHERE user_id = ?) as likes_given,
         (SELECT COUNT(*) FROM comments WHERE user_id = ?) as comments_count,
@@ -1364,7 +1369,7 @@ app.get('/api/users/search', (req, res) => {
 // Get popular tags
 app.get('/api/tags/popular', (req, res) => {
   try {
-    const memories = db.prepare("SELECT tags FROM memories WHERE visibility = 'public'").all();
+    const memories = db.prepare("SELECT tags FROM memories WHERE visibility = 'public' AND deleted_at IS NULL").all();
 
     const tagCount = {};
     memories.forEach(m => {
@@ -1405,7 +1410,7 @@ app.get('/api/search', (req, res) => {
       SELECT m.*, u.username, u.avatar
       FROM memories m
       JOIN users u ON m.user_id = u.id
-      WHERE m.visibility = 'public'
+      WHERE m.visibility = 'public' AND m.deleted_at IS NULL
         AND (m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?)
       ORDER BY m.created_at DESC
       LIMIT 50
@@ -1424,7 +1429,7 @@ app.get('/api/user/export', authMiddleware, (req, res) => {
 
   try {
     const user = db.prepare('SELECT id, username, email, avatar, created_at FROM users WHERE id = ?').get(userId);
-    const memories = db.prepare('SELECT * FROM memories WHERE user_id = ?').all(userId);
+    const memories = db.prepare('SELECT * FROM memories WHERE user_id = ? AND deleted_at IS NULL').all(userId);
     const bookmarks = db.prepare('SELECT * FROM bookmarks WHERE user_id = ?').all(userId);
 
     res.json({
@@ -1448,7 +1453,7 @@ app.get('/api/memories/random', (req, res) => {
       SELECT m.*, u.username, u.avatar
       FROM memories m
       JOIN users u ON m.user_id = u.id
-      WHERE m.visibility = 'public'
+      WHERE m.visibility = 'public' AND m.deleted_at IS NULL
       ORDER BY RANDOM()
       LIMIT 1
     `).get();
@@ -1472,7 +1477,7 @@ app.get('/api/memories/hot', (req, res) => {
         (m.likes_count + m.bookmarks_count + m.comments_count + m.views_count) as hot_score
       FROM memories m
       JOIN users u ON m.user_id = u.id
-      WHERE m.visibility = 'public'
+      WHERE m.visibility = 'public' AND m.deleted_at IS NULL
       ORDER BY hot_score DESC
       LIMIT 10
     `).all();
@@ -1523,6 +1528,109 @@ app.delete('/api/upload/image/:filename', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('删除图片错误:', error);
     res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// ==================== Trash Routes ====================
+
+// Get trash list
+app.get('/api/trash', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const memories = db.prepare(`
+      SELECT m.*, u.username, u.avatar
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.user_id = ? AND m.deleted_at IS NOT NULL
+      ORDER BY m.deleted_at DESC
+    `).all(userId);
+
+    res.json(memories);
+  } catch (error) {
+    console.error('获取回收站错误:', error);
+    res.status(500).json({ error: '获取回收站失败' });
+  }
+});
+
+// Restore memory from trash
+app.post('/api/trash/:id/restore', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NOT NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '回收站中未找到此记忆' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权恢复此记忆' });
+    }
+
+    db.prepare('UPDATE memories SET deleted_at = NULL WHERE id = ?').run(memoryId);
+
+    const restored = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    res.json({ message: '记忆已恢复', memory: restored });
+  } catch (error) {
+    console.error('恢复记忆错误:', error);
+    res.status(500).json({ error: '恢复记忆失败' });
+  }
+});
+
+// Permanently delete memory
+app.delete('/api/trash/:id', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NOT NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '回收站中未找到此记忆' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权删除此记忆' });
+    }
+
+    // 永久删除相关数据
+    db.prepare('DELETE FROM likes WHERE memory_id = ?').run(memoryId);
+    db.prepare('DELETE FROM bookmarks WHERE memory_id = ?').run(memoryId);
+    db.prepare('DELETE FROM comments WHERE memory_id = ?').run(memoryId);
+    db.prepare('DELETE FROM series_memories WHERE memory_id = ?').run(memoryId);
+    db.prepare('DELETE FROM memories WHERE id = ?').run(memoryId);
+
+    res.json({ message: '记忆已永久删除' });
+  } catch (error) {
+    console.error('永久删除记忆错误:', error);
+    res.status(500).json({ error: '永久删除失败' });
+  }
+});
+
+// Empty trash (delete all trashed memories)
+app.delete('/api/trash', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const trashedMemories = db.prepare('SELECT id FROM memories WHERE user_id = ? AND deleted_at IS NOT NULL').all(userId);
+    const memoryIds = trashedMemories.map(m => m.id);
+
+    if (memoryIds.length === 0) {
+      return res.json({ message: '回收站为空' });
+    }
+
+    // 删除所有相关数据
+    const placeholders = memoryIds.map(() => '?').join(',');
+    db.prepare(`DELETE FROM likes WHERE memory_id IN (${placeholders})`).run(...memoryIds);
+    db.prepare(`DELETE FROM bookmarks WHERE memory_id IN (${placeholders})`).run(...memoryIds);
+    db.prepare(`DELETE FROM comments WHERE memory_id IN (${placeholders})`).run(...memoryIds);
+    db.prepare(`DELETE FROM series_memories WHERE memory_id IN (${placeholders})`).run(...memoryIds);
+    db.prepare(`DELETE FROM memories WHERE id IN (${placeholders})`).run(...memoryIds);
+
+    res.json({ message: '回收站已清空', deletedCount: memoryIds.length });
+  } catch (error) {
+    console.error('清空回收站错误:', error);
+    res.status(500).json({ error: '清空回收站失败' });
   }
 });
 

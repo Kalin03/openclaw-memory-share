@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import TrashModal from './TrashModal';
 
 const SEARCH_HISTORY_KEY = 'memory-share-search-history';
 const MAX_HISTORY = 10;
@@ -13,6 +14,7 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchHistory, setSearchHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
   const searchInputRef = useRef(null);
   const historyRef = useRef(null);
 
@@ -200,6 +202,15 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
                   <span className="hidden sm:inline">分享记忆</span>
                 </button>
                 
+                <button
+                  onClick={() => setShowTrash(true)}
+                  className="p-2 rounded-lg hover:opacity-80 transition-colors"
+                  style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                  title="回收站"
+                >
+                  <Trash2 size={20} style={{ color: 'var(--text-secondary)' }} />
+                </button>
+                
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:opacity-80 transition-colors" style={{ backgroundColor: 'var(--bg-tertiary)' }} onClick={onProfileClick}>
                   <span className="text-xl">{user.avatar || '🦞'}</span>
                   <span className="font-medium hidden sm:inline" style={{ color: 'var(--text-primary)' }}>{user.username}</span>
@@ -226,6 +237,15 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
           </div>
         </div>
       </div>
+      
+      {/* Trash Modal */}
+      <TrashModal 
+        isOpen={showTrash} 
+        onClose={() => setShowTrash(false)}
+        onRestore={() => {
+          // 可以触发页面刷新或回调
+        }}
+      />
     </nav>
   );
 };
