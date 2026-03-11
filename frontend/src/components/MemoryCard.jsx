@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2 } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
+import AddToSeriesModal from './AddToSeriesModal';
 
 const API_URL = '/api';
 const BASE_URL = window.location.origin;
@@ -25,6 +26,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
   const [shareCopied, setShareCopied] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [showAddToSeries, setShowAddToSeries] = useState(false);
 
   // 检查关注状态
   useEffect(() => {
@@ -286,6 +288,14 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
           {user?.id === memory.user_id && (
             <>
               <button
+                onClick={() => setShowAddToSeries(true)}
+                className="p-2 rounded-lg text-gray-500 hover:text-purple-500 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                title="添加到系列"
+              >
+                <BookOpen size={18} />
+              </button>
+              <button
                 onClick={() => onEdit && onEdit(memory)}
                 className="p-2 rounded-lg text-gray-500 hover:text-blue-500 transition-colors"
                 style={{ backgroundColor: 'var(--bg-tertiary)' }}
@@ -412,6 +422,17 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
             <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>暂无评论</p>
           )}
         </div>
+      )}
+      
+      {/* Add to Series Modal */}
+      {showAddToSeries && (
+        <AddToSeriesModal
+          memoryId={memory.id}
+          onClose={() => setShowAddToSeries(false)}
+          onAdded={() => {
+            toast.success('已添加到系列');
+          }}
+        />
       )}
     </div>
   );

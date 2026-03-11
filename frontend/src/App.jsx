@@ -11,8 +11,10 @@ import RandomMemory from './components/RandomMemory';
 import TagCloud from './components/TagCloud';
 import BackToTop from './components/BackToTop';
 import MemoryDetail from './components/MemoryDetail';
+import SeriesDetail from './components/SeriesDetail';
 import CheckinCard from './components/CheckinCard';
 import CheckinLeaderboard from './components/CheckinLeaderboard';
+import HotSeries from './components/HotSeries';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
@@ -285,6 +287,7 @@ const Home = () => {
             <div className="sticky top-24 space-y-6">
               <CheckinCard />
               <CheckinLeaderboard />
+              <HotSeries />
               <TagCloud onTagClick={handleTagClick} />
             </div>
           </aside>
@@ -328,6 +331,7 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/memory/:id" element={<MemoryDetail />} />
+              <Route path="/series/:id" element={<SeriesDetail />} />
             </Routes>
           </ToastProvider>
         </MemoriesProvider>

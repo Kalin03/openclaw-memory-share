@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users, Pin } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users, Pin, BookOpen, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
 import axios from 'axios';
 import FollowList from './FollowList';
+import CreateSeriesModal from './CreateSeriesModal';
+import SeriesCard from './SeriesCard';
 
 const API_URL = '/api';
 
@@ -16,6 +18,7 @@ const UserProfile = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState('stats');
   const [memories, setMemories] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
+  const [seriesList, setSeriesList] = useState([]);
   const [stats, setStats] = useState(null);
   const [checkinStatus, setCheckinStatus] = useState(null);
   const [followStats, setFollowStats] = useState({ followingCount: 0, followersCount: 0 });
@@ -26,6 +29,8 @@ const UserProfile = ({ onClose }) => {
   const [editContent, setEditContent] = useState('');
   const [editTags, setEditTags] = useState('');
   const [showFollowList, setShowFollowList] = useState(false);
+  const [showCreateSeries, setShowCreateSeries] = useState(false);
+  const [editingSeries, setEditingSeries] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -36,18 +41,20 @@ const UserProfile = ({ onClose }) => {
   const fetchUserData = async () => {
     setLoading(true);
     try {
-      const [memoriesRes, bookmarksRes, statsRes, checkinRes, followStatsRes] = await Promise.all([
+      const [memoriesRes, bookmarksRes, statsRes, checkinRes, followStatsRes, seriesRes] = await Promise.all([
         axios.get(`${API_URL}/user/memories`),
         axios.get(`${API_URL}/user/bookmarks`),
         axios.get(`${API_URL}/user/stats`),
         axios.get(`${API_URL}/user/checkin`),
-        axios.get(`${API_URL}/user/follow-stats/${user.id}`)
+        axios.get(`${API_URL}/user/follow-stats/${user.id}`),
+        axios.get(`${API_URL}/user/series`)
       ]);
       setMemories(memoriesRes.data || []);
       setBookmarks(bookmarksRes.data || []);
       setStats(statsRes.data);
       setCheckinStatus(checkinRes.data);
       setFollowStats(followStatsRes.data);
+      setSeriesList(seriesRes.data.series || []);
     } catch (err) {
       console.error('获取用户数据失败:', err);
     } finally {
@@ -130,6 +137,30 @@ const UserProfile = ({ onClose }) => {
     setEditTitle('');
     setEditContent('');
     setEditTags('');
+  };
+
+  const handleDeleteSeries = async (seriesId) => {
+    if (!window.confirm('确定要删除这个系列吗？系列内的记忆不会被删除。')) return;
+    
+    try {
+      await axios.delete(`${API_URL}/series/${seriesId}`);
+      setSeriesList(seriesList.filter(s => s.id !== seriesId));
+      toast.success('系列删除成功');
+    } catch (err) {
+      console.error('删除系列失败:', err);
+      toast.error(err.response?.data?.error || '删除失败');
+    }
+  };
+
+  const handleEditSeries = (series) => {
+    setEditingSeries(series);
+    setShowCreateSeries(true);
+  };
+
+  const handleSeriesCreated = () => {
+    fetchUserData();
+    setShowCreateSeries(false);
+    setEditingSeries(null);
   };
 
   const handleExport = async (format = 'markdown') => {
@@ -303,6 +334,17 @@ const UserProfile = ({ onClose }) => {
             }`}
           >
             我的发布 ({memories.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('series')}
+            className={`flex-1 py-3 text-center font-medium transition-colors ${
+              activeTab === 'series'
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-gray-500 hover:text-dark'
+            }`}
+          >
+            <BookOpen size={16} className="inline mr-1" />
+            我的系列 ({seriesList.length})
           </button>
           <button
             onClick={() => setActiveTab('bookmarks')}
@@ -598,6 +640,39 @@ const UserProfile = ({ onClose }) => {
                 ))}
               </div>
             )
+          ) : activeTab === 'series' ? (
+            <div>
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={() => {
+                    setEditingSeries(null);
+                    setShowCreateSeries(true);
+                  }}
+                  className="btn-primary flex items-center gap-1"
+                >
+                  <Plus size={16} /> 创建系列
+                </button>
+              </div>
+              {seriesList.length === 0 ? (
+                <div className="text-center py-12">
+                  <span className="text-4xl mb-4 block">📚</span>
+                  <p className="text-gray-500 mb-2">还没有创建系列</p>
+                  <p className="text-sm text-gray-400">创建系列来整理你的记忆</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {seriesList.map(s => (
+                    <SeriesCard
+                      key={s.id}
+                      series={s}
+                      showActions={true}
+                      onEdit={handleEditSeries}
+                      onDelete={handleDeleteSeries}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
             bookmarks.length === 0 ? (
               <div className="text-center py-12">
@@ -637,6 +712,18 @@ const UserProfile = ({ onClose }) => {
           userId={user.id} 
           username={user.username} 
           onClose={() => setShowFollowList(false)} 
+        />
+      )}
+      
+      {/* Create/Edit Series Modal */}
+      {showCreateSeries && (
+        <CreateSeriesModal
+          editSeries={editingSeries}
+          onClose={() => {
+            setShowCreateSeries(false);
+            setEditingSeries(null);
+          }}
+          onCreated={handleSeriesCreated}
         />
       )}
     </div>

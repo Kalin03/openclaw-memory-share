@@ -161,6 +161,33 @@ async function initDB() {
     )
   `);
 
+  // 创建系列表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS series (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      cover TEXT DEFAULT '📚',
+      is_public INTEGER DEFAULT 1,
+      memories_count INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 创建系列-记忆关联表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS series_memories (
+      id TEXT PRIMARY KEY,
+      series_id TEXT NOT NULL,
+      memory_id TEXT NOT NULL,
+      sort_order INTEGER DEFAULT 0,
+      added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(series_id, memory_id)
+    )
+  `);
+
   saveDB();
 }
 
@@ -1552,5 +1579,352 @@ app.delete('/api/notifications/:id', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('删除通知错误:', error);
     res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// ============ Series Routes ============
+
+// 创建系列
+app.post('/api/series', authMiddleware, (req, res) => {
+  const { title, description, cover, isPublic } = req.body;
+  const userId = req.user.id;
+
+  if (!title || title.trim() === '') {
+    return res.status(400).json({ error: '系列标题不能为空' });
+  }
+
+  try {
+    const seriesId = uuidv4();
+    runQuery(
+      'INSERT INTO series (id, user_id, title, description, cover, is_public) VALUES (?, ?, ?, ?, ?, ?)',
+      [seriesId, userId, title.trim(), description || '', cover || '📚', isPublic !== false ? 1 : 0]
+    );
+
+    const series = getOne(`
+      SELECT s.*, u.username, u.avatar
+      FROM series s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = ?
+    `, [seriesId]);
+
+    res.status(201).json({ message: '系列创建成功', series });
+  } catch (error) {
+    console.error('创建系列错误:', error);
+    res.status(500).json({ error: '创建系列失败' });
+  }
+});
+
+// 获取用户的系列列表
+app.get('/api/user/series', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const series = getAll(`
+      SELECT s.*, u.username, u.avatar
+      FROM series s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.user_id = ?
+      ORDER BY s.updated_at DESC
+    `, [userId]);
+
+    res.json({ series });
+  } catch (error) {
+    console.error('获取系列列表错误:', error);
+    res.status(500).json({ error: '获取系列列表失败' });
+  }
+});
+
+// 获取某用户的公开系列（他人查看）
+app.get('/api/users/:userId/series', (req, res) => {
+  const targetUserId = req.params.userId;
+  const currentUserId = req.user?.id;
+
+  try {
+    let series;
+    if (currentUserId === targetUserId) {
+      // 查看自己的系列，显示全部
+      series = getAll(`
+        SELECT s.*, u.username, u.avatar
+        FROM series s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.user_id = ?
+        ORDER BY s.updated_at DESC
+      `, [targetUserId]);
+    } else {
+      // 查看他人系列，只显示公开的
+      series = getAll(`
+        SELECT s.*, u.username, u.avatar
+        FROM series s
+        JOIN users u ON s.user_id = u.id
+        WHERE s.user_id = ? AND s.is_public = 1
+        ORDER BY s.updated_at DESC
+      `, [targetUserId]);
+    }
+
+    res.json({ series });
+  } catch (error) {
+    console.error('获取用户系列错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 获取热门系列（按记忆数和更新时间排序）- 必须在 /api/series/:id 之前
+app.get('/api/series/hot', (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+
+  try {
+    const series = getAll(`
+      SELECT s.*, u.username, u.avatar
+      FROM series s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.is_public = 1 AND s.memories_count > 0
+      ORDER BY s.memories_count DESC, s.updated_at DESC
+      LIMIT ?
+    `, [limit]);
+
+    res.json({ series });
+  } catch (error) {
+    console.error('获取热门系列错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 获取系列详情
+app.get('/api/series/:id', (req, res) => {
+  const seriesId = req.params.id;
+  const userId = req.user?.id;
+
+  try {
+    const series = getOne(`
+      SELECT s.*, u.username, u.avatar
+      FROM series s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = ?
+    `, [seriesId]);
+
+    if (!series) {
+      return res.status(404).json({ error: '系列不存在' });
+    }
+
+    // 检查权限：非公开系列只有作者可以查看
+    if (!series.is_public && series.user_id !== userId) {
+      return res.status(403).json({ error: '无权查看此系列' });
+    }
+
+    // 获取系列内的记忆
+    const memories = getAll(`
+      SELECT m.*, u.username, u.avatar, sm.sort_order,
+        EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
+        EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
+      FROM series_memories sm
+      JOIN memories m ON sm.memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE sm.series_id = ?
+      ORDER BY sm.sort_order ASC, sm.added_at DESC
+    `, [userId || '', userId || '', seriesId]);
+
+    res.json({ ...series, memories });
+  } catch (error) {
+    console.error('获取系列详情错误:', error);
+    res.status(500).json({ error: '获取系列详情失败' });
+  }
+});
+
+// 更新系列
+app.put('/api/series/:id', authMiddleware, (req, res) => {
+  const seriesId = req.params.id;
+  const { title, description, cover, isPublic } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const series = getOne('SELECT * FROM series WHERE id = ?', [seriesId]);
+    if (!series) {
+      return res.status(404).json({ error: '系列不存在' });
+    }
+
+    if (series.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此系列' });
+    }
+
+    runQuery(
+      'UPDATE series SET title = ?, description = ?, cover = ?, is_public = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [title?.trim() || series.title, description ?? series.description, cover || series.cover, isPublic !== undefined ? (isPublic ? 1 : 0) : series.is_public, seriesId]
+    );
+
+    const updatedSeries = getOne(`
+      SELECT s.*, u.username, u.avatar
+      FROM series s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = ?
+    `, [seriesId]);
+
+    res.json({ message: '系列更新成功', series: updatedSeries });
+  } catch (error) {
+    console.error('更新系列错误:', error);
+    res.status(500).json({ error: '更新系列失败' });
+  }
+});
+
+// 删除系列
+app.delete('/api/series/:id', authMiddleware, (req, res) => {
+  const seriesId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const series = getOne('SELECT * FROM series WHERE id = ?', [seriesId]);
+    if (!series) {
+      return res.status(404).json({ error: '系列不存在' });
+    }
+
+    if (series.user_id !== userId) {
+      return res.status(403).json({ error: '无权删除此系列' });
+    }
+
+    // 删除系列-记忆关联
+    runQuery('DELETE FROM series_memories WHERE series_id = ?', [seriesId]);
+    // 删除系列
+    runQuery('DELETE FROM series WHERE id = ?', [seriesId]);
+
+    res.json({ message: '系列删除成功' });
+  } catch (error) {
+    console.error('删除系列错误:', error);
+    res.status(500).json({ error: '删除系列失败' });
+  }
+});
+
+// 添加记忆到系列
+app.post('/api/series/:id/memories', authMiddleware, (req, res) => {
+  const seriesId = req.params.id;
+  const { memoryId, sortOrder } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryId) {
+    return res.status(400).json({ error: '记忆ID不能为空' });
+  }
+
+  try {
+    const series = getOne('SELECT * FROM series WHERE id = ?', [seriesId]);
+    if (!series) {
+      return res.status(404).json({ error: '系列不存在' });
+    }
+
+    if (series.user_id !== userId) {
+      return res.status(403).json({ error: '无权操作此系列' });
+    }
+
+    // 检查记忆是否存在
+    const memory = getOne('SELECT * FROM memories WHERE id = ?', [memoryId]);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    // 检查是否已添加
+    const existing = getOne('SELECT * FROM series_memories WHERE series_id = ? AND memory_id = ?', [seriesId, memoryId]);
+    if (existing) {
+      return res.status(400).json({ error: '该记忆已在系列中' });
+    }
+
+    // 获取当前最大排序号
+    const maxOrder = getOne('SELECT MAX(sort_order) as max_order FROM series_memories WHERE series_id = ?', [seriesId]);
+    const newOrder = sortOrder !== undefined ? sortOrder : (maxOrder?.max_order || 0) + 1;
+
+    const smId = uuidv4();
+    runQuery(
+      'INSERT INTO series_memories (id, series_id, memory_id, sort_order) VALUES (?, ?, ?, ?)',
+      [smId, seriesId, memoryId, newOrder]
+    );
+
+    // 更新系列的记忆数量和更新时间
+    runQuery('UPDATE series SET memories_count = memories_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [seriesId]);
+
+    res.json({ message: '记忆已添加到系列', sortOrder: newOrder });
+  } catch (error) {
+    console.error('添加记忆到系列错误:', error);
+    res.status(500).json({ error: '添加失败' });
+  }
+});
+
+// 从系列中移除记忆
+app.delete('/api/series/:seriesId/memories/:memoryId', authMiddleware, (req, res) => {
+  const { seriesId, memoryId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const series = getOne('SELECT * FROM series WHERE id = ?', [seriesId]);
+    if (!series) {
+      return res.status(404).json({ error: '系列不存在' });
+    }
+
+    if (series.user_id !== userId) {
+      return res.status(403).json({ error: '无权操作此系列' });
+    }
+
+    const sm = getOne('SELECT * FROM series_memories WHERE series_id = ? AND memory_id = ?', [seriesId, memoryId]);
+    if (!sm) {
+      return res.status(404).json({ error: '该记忆不在系列中' });
+    }
+
+    runQuery('DELETE FROM series_memories WHERE series_id = ? AND memory_id = ?', [seriesId, memoryId]);
+    runQuery('UPDATE series SET memories_count = memories_count - 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [seriesId]);
+
+    res.json({ message: '记忆已从系列中移除' });
+  } catch (error) {
+    console.error('移除记忆错误:', error);
+    res.status(500).json({ error: '移除失败' });
+  }
+});
+
+// 更新系列内记忆的排序
+app.put('/api/series/:id/order', authMiddleware, (req, res) => {
+  const seriesId = req.params.id;
+  const { orders } = req.body; // [{ memoryId: 'xxx', sortOrder: 1 }, ...]
+  const userId = req.user.id;
+
+  if (!orders || !Array.isArray(orders)) {
+    return res.status(400).json({ error: '排序数据无效' });
+  }
+
+  try {
+    const series = getOne('SELECT * FROM series WHERE id = ?', [seriesId]);
+    if (!series) {
+      return res.status(404).json({ error: '系列不存在' });
+    }
+
+    if (series.user_id !== userId) {
+      return res.status(403).json({ error: '无权操作此系列' });
+    }
+
+    // 批量更新排序
+    orders.forEach(item => {
+      runQuery('UPDATE series_memories SET sort_order = ? WHERE series_id = ? AND memory_id = ?', [item.sortOrder, seriesId, item.memoryId]);
+    });
+
+    runQuery('UPDATE series SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [seriesId]);
+
+    res.json({ message: '排序更新成功' });
+  } catch (error) {
+    console.error('更新排序错误:', error);
+    res.status(500).json({ error: '更新排序失败' });
+  }
+});
+
+// 获取记忆所属的系列
+app.get('/api/memories/:id/series', (req, res) => {
+  const memoryId = req.params.id;
+
+  try {
+    const series = getAll(`
+      SELECT s.*, u.username, u.avatar
+      FROM series_memories sm
+      JOIN series s ON sm.series_id = s.id
+      JOIN users u ON s.user_id = u.id
+      WHERE sm.memory_id = ? AND s.is_public = 1
+      ORDER BY s.updated_at DESC
+    `, [memoryId]);
+
+    res.json({ series });
+  } catch (error) {
+    console.error('获取记忆所属系列错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
