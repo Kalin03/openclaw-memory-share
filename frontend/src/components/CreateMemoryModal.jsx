@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag, Save, Globe, Lock, Users } from 'lucide-react';
+import { X, FileText, Tag, Save, Globe, Lock, Users, Layout } from 'lucide-react';
+import MemoryTemplates, { memoryTemplates } from './MemoryTemplates';
 
 const DRAFT_KEY = 'memory-share-draft';
 
@@ -18,6 +19,8 @@ const CreateMemoryModal = ({ onClose }) => {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('blank');
+  const [showTemplates, setShowTemplates] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -39,6 +42,7 @@ const CreateMemoryModal = ({ onClose }) => {
             visibility: draft.visibility || 'public'
           });
           setHasDraft(true);
+          setShowTemplates(false); // 有草稿时隐藏模板选择
           toast.info('已恢复上次未发布的草稿');
         }
       } catch (e) {
@@ -61,6 +65,26 @@ const CreateMemoryModal = ({ onClose }) => {
   const clearDraft = () => {
     localStorage.removeItem(DRAFT_KEY);
     setHasDraft(false);
+  };
+
+  // 处理模板选择
+  const handleTemplateSelect = (template) => {
+    setSelectedTemplate(template.id);
+    setFormData({
+      title: template.template.title,
+      content: template.template.content,
+      tags: template.template.tags,
+      visibility: 'public'
+    });
+    setShowTemplates(false);
+    if (template.id !== 'blank') {
+      toast.success(`已应用「${template.name}」模板`);
+    }
+  };
+
+  // 重新选择模板
+  const handleReselectTemplate = () => {
+    setShowTemplates(true);
   };
 
   const handleSubmit = async (e) => {
@@ -88,6 +112,8 @@ const CreateMemoryModal = ({ onClose }) => {
     if (window.confirm('确定要清除草稿吗？')) {
       setFormData({ title: '', content: '', tags: '', visibility: 'public' });
       clearDraft();
+      setSelectedTemplate('blank');
+      setShowTemplates(true);
       toast.success('草稿已清除');
     }
   };
@@ -96,7 +122,7 @@ const CreateMemoryModal = ({ onClose }) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="rounded-2xl w-full max-w-2xl relative max-h-[90vh] overflow-y-auto" style={{ backgroundColor: 'var(--bg-primary)' }}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-secondary to-primary p-6 text-white sticky top-0 rounded-t-2xl">
+        <div className="bg-gradient-to-r from-secondary to-primary p-6 text-white sticky top-0 rounded-t-2xl z-10">
           <button 
             onClick={onClose}
             className="absolute top-4 right-4 text-white/80 hover:text-white"
@@ -115,6 +141,42 @@ const CreateMemoryModal = ({ onClose }) => {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* 模板选择区域 */}
+          {showTemplates ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Layout className="w-4 h-4" style={{ color: 'var(--text-primary)' }} />
+                <label className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                  选择模板开始
+                </label>
+              </div>
+              <MemoryTemplates 
+                selectedTemplate={selectedTemplate}
+                onSelect={handleTemplateSelect}
+              />
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                选择模板后将自动填充内容框架，你可以自由修改
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-3 rounded-lg" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+              <div className="flex items-center gap-2">
+                <Layout className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  当前模板：{memoryTemplates.find(t => t.id === selectedTemplate)?.name || '空白模板'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleReselectTemplate}
+                className="text-sm text-primary hover:underline"
+                style={{ color: '#e8572b' }}
+              >
+                更换模板
+              </button>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
               <FileText className="inline w-4 h-4 mr-1" />
