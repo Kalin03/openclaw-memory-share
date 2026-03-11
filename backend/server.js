@@ -99,6 +99,18 @@ async function initDB() {
     console.log('views_count column check/creation skipped:', e.message);
   }
 
+  // 创建签到表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS sign_ins (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      checkin_date TEXT NOT NULL,
+      streak INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, checkin_date)
+    )
+  `);
+
   saveDB();
 }
 
@@ -965,6 +977,143 @@ app.get('/api/user/stats', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取用户统计错误:', error);
     res.status(500).json({ error: '获取用户统计失败' });
+  }
+});
+
+// ============ Checkin Routes ============
+
+// 用户签到
+app.post('/api/user/checkin', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+  try {
+    // 检查今天是否已签到
+    const existingCheckin = getOne('SELECT * FROM sign_ins WHERE user_id = ? AND checkin_date = ?', [userId, today]);
+    
+    if (existingCheckin) {
+      return res.status(400).json({ error: '今天已经签到了', alreadyCheckedIn: true });
+    }
+
+    // 检查昨天是否签到，计算连续签到天数
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    
+    const yesterdayCheckin = getOne('SELECT streak FROM sign_ins WHERE user_id = ? AND checkin_date = ?', [userId, yesterdayStr]);
+    const streak = yesterdayCheckin ? (yesterdayCheckin.streak + 1) : 1;
+
+    // 插入签到记录
+    const checkinId = uuidv4();
+    runQuery('INSERT INTO sign_ins (id, user_id, checkin_date, streak) VALUES (?, ?, ?, ?)', [checkinId, userId, today, streak]);
+
+    // 获取总签到天数
+    const totalCheckins = getOne('SELECT COUNT(*) as count FROM sign_ins WHERE user_id = ?', [userId])?.count || 0;
+
+    res.json({
+      message: '签到成功',
+      checkin: {
+        id: checkinId,
+        checkin_date: today,
+        streak,
+        totalCheckins: totalCheckins + 1
+      }
+    });
+  } catch (error) {
+    console.error('签到错误:', error);
+    res.status(500).json({ error: '签到失败' });
+  }
+});
+
+// 获取签到状态
+app.get('/api/user/checkin', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    // 检查今天是否已签到
+    const todayCheckin = getOne('SELECT * FROM sign_ins WHERE user_id = ? AND checkin_date = ?', [userId, today]);
+    
+    // 获取当前连续签到天数
+    const latestCheckin = getOne('SELECT streak, checkin_date FROM sign_ins WHERE user_id = ? ORDER BY checkin_date DESC LIMIT 1', [userId]);
+    
+    // 获取总签到天数
+    const totalCheckins = getOne('SELECT COUNT(*) as count FROM sign_ins WHERE user_id = ?', [userId])?.count || 0;
+
+    // 判断连续签到是否中断（如果最近签到不是今天也不是昨天，则中断）
+    let currentStreak = 0;
+    if (todayCheckin) {
+      currentStreak = todayCheckin.streak;
+    } else if (latestCheckin) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      if (latestCheckin.checkin_date === yesterdayStr) {
+        currentStreak = latestCheckin.streak;
+      }
+    }
+
+    // 获取最长连续签到天数
+    const allCheckins = getAll('SELECT streak FROM sign_ins WHERE user_id = ? ORDER BY streak DESC', [userId]);
+    const maxStreak = allCheckins.length > 0 ? Math.max(...allCheckins.map(c => c.streak)) : 0;
+
+    res.json({
+      checkedInToday: !!todayCheckin,
+      currentStreak,
+      maxStreak,
+      totalCheckins
+    });
+  } catch (error) {
+    console.error('获取签到状态错误:', error);
+    res.status(500).json({ error: '获取签到状态失败' });
+  }
+});
+
+// 获取签到历史（最近30天）
+app.get('/api/user/checkin/history', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const days = parseInt(req.query.days) || 30;
+
+  try {
+    const checkins = getAll(`
+      SELECT checkin_date, streak 
+      FROM sign_ins 
+      WHERE user_id = ? 
+      ORDER BY checkin_date DESC 
+      LIMIT ?
+    `, [userId, days]);
+
+    res.json({ checkins });
+  } catch (error) {
+    console.error('获取签到历史错误:', error);
+    res.status(500).json({ error: '获取签到历史失败' });
+  }
+});
+
+// 获取签到排行榜（连续签到天数）
+app.get('/api/checkin/leaderboard', (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+
+  try {
+    // 获取每个用户最新的签到记录（按连续天数排序）
+    const leaderboard = getAll(`
+      SELECT s.user_id, s.streak, s.checkin_date, u.username, u.avatar
+      FROM sign_ins s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id IN (
+        SELECT id FROM sign_ins s2 
+        WHERE s2.user_id = s.user_id 
+        ORDER BY s2.checkin_date DESC 
+        LIMIT 1
+      )
+      ORDER BY s.streak DESC, s.checkin_date DESC
+      LIMIT ?
+    `, [limit]);
+
+    res.json({ leaderboard });
+  } catch (error) {
+    console.error('获取签到排行榜错误:', error);
+    res.status(500).json({ error: '获取签到排行榜失败' });
   }
 });
 

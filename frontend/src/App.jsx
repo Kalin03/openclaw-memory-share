@@ -11,6 +11,8 @@ import RandomMemory from './components/RandomMemory';
 import TagCloud from './components/TagCloud';
 import BackToTop from './components/BackToTop';
 import MemoryDetail from './components/MemoryDetail';
+import CheckinCard from './components/CheckinCard';
+import CheckinLeaderboard from './components/CheckinLeaderboard';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
@@ -251,6 +253,8 @@ const Home = () => {
           {/* Right Sidebar */}
           <aside className="hidden lg:block w-72 flex-shrink-0">
             <div className="sticky top-24 space-y-6">
+              <CheckinCard />
+              <CheckinLeaderboard />
               <TagCloud onTagClick={handleTagClick} />
             </div>
           </aside>

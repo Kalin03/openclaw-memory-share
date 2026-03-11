@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
@@ -16,6 +16,7 @@ const UserProfile = ({ onClose }) => {
   const [memories, setMemories] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [stats, setStats] = useState(null);
+  const [checkinStatus, setCheckinStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [editingMemory, setEditingMemory] = useState(null);
@@ -32,14 +33,16 @@ const UserProfile = ({ onClose }) => {
   const fetchUserData = async () => {
     setLoading(true);
     try {
-      const [memoriesRes, bookmarksRes, statsRes] = await Promise.all([
+      const [memoriesRes, bookmarksRes, statsRes, checkinRes] = await Promise.all([
         axios.get(`${API_URL}/user/memories`),
         axios.get(`${API_URL}/user/bookmarks`),
-        axios.get(`${API_URL}/user/stats`)
+        axios.get(`${API_URL}/user/stats`),
+        axios.get(`${API_URL}/user/checkin`)
       ]);
       setMemories(memoriesRes.data || []);
       setBookmarks(bookmarksRes.data || []);
       setStats(statsRes.data);
+      setCheckinStatus(checkinRes.data);
     } catch (err) {
       console.error('获取用户数据失败:', err);
     } finally {
@@ -206,7 +209,7 @@ const UserProfile = ({ onClose }) => {
           )}
 
           {/* Quick Stats */}
-          <div className="flex gap-6 mt-4">
+          <div className="flex flex-wrap gap-4 mt-4">
             <div className="flex items-center gap-2">
               <Calendar size={18} className="text-primary" />
               <span className="font-semibold text-dark">{stats?.daysJoined || 0}</span>
@@ -227,6 +230,20 @@ const UserProfile = ({ onClose }) => {
               <span className="font-semibold text-dark">{stats?.totalBookmarks || 0}</span>
               <span className="text-gray-500 text-sm">被收藏</span>
             </div>
+            {checkinStatus && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Flame size={18} className="text-orange-500" />
+                  <span className="font-semibold text-dark">{checkinStatus.currentStreak}</span>
+                  <span className="text-gray-500 text-sm">连续签到</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Trophy size={18} className="text-amber-500" />
+                  <span className="font-semibold text-dark">{checkinStatus.totalCheckins}</span>
+                  <span className="text-gray-500 text-sm">累计签到</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -297,6 +314,35 @@ const UserProfile = ({ onClose }) => {
                     <div className="text-sm text-gray-500">被收藏</div>
                   </div>
                 </div>
+
+                {/* Checkin Stats */}
+                {checkinStatus && (
+                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border border-orange-100">
+                    <h3 className="font-bold text-dark mb-4 flex items-center gap-2">
+                      <Flame size={20} className="text-orange-500" />
+                      签到统计
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-white rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-orange-500">{checkinStatus.currentStreak}</div>
+                        <div className="text-sm text-gray-500">连续签到</div>
+                        {checkinStatus.checkedInToday && (
+                          <span className="inline-block mt-1 px-2 py-0.5 bg-green-100 text-green-600 text-xs rounded-full">
+                            今日已签
+                          </span>
+                        )}
+                      </div>
+                      <div className="bg-white rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-amber-500">{checkinStatus.maxStreak}</div>
+                        <div className="text-sm text-gray-500">最长连续</div>
+                      </div>
+                      <div className="bg-white rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-yellow-500">{checkinStatus.totalCheckins}</div>
+                        <div className="text-sm text-gray-500">累计签到</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Activity Stats */}
                 <div className="bg-gray-50 rounded-xl p-5">
