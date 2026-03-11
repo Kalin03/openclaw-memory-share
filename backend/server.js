@@ -774,6 +774,81 @@ app.get('/api/user/memories', authMiddleware, (req, res) => {
   }
 });
 
+// Export user's memories as Markdown
+app.get('/api/user/export', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const format = req.query.format || 'markdown';
+
+  try {
+    const user = getOne('SELECT username FROM users WHERE id = ?', [userId]);
+    const memories = getAll(`
+      SELECT m.*, u.username, u.avatar
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.user_id = ?
+      ORDER BY m.created_at DESC
+    `, [userId]);
+
+    if (memories.length === 0) {
+      return res.status(400).json({ error: '暂无记忆可导出' });
+    }
+
+    if (format === 'json') {
+      // Export as JSON
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="memories-${user.username}-${new Date().toISOString().split('T')[0]}.json"`);
+      return res.json({
+        exportedAt: new Date().toISOString(),
+        user: user.username,
+        totalMemories: memories.length,
+        memories: memories.map(m => ({
+          id: m.id,
+          title: m.title,
+          content: m.content,
+          tags: m.tags ? m.tags.split(',').filter(Boolean) : [],
+          likes_count: m.likes_count,
+          bookmarks_count: m.bookmarks_count,
+          comments_count: m.comments_count,
+          created_at: m.created_at,
+          updated_at: m.updated_at
+        }))
+      });
+    }
+
+    // Export as Markdown (default)
+    let markdown = `# 🦞 ${user.username} 的记忆导出\n\n`;
+    markdown += `> 导出时间: ${new Date().toLocaleString('zh-CN')}\n`;
+    markdown += `> 共计 ${memories.length} 条记忆\n\n`;
+    markdown += `---\n\n`;
+
+    memories.forEach((memory, index) => {
+      markdown += `## ${index + 1}. ${memory.title}\n\n`;
+      markdown += `**创建时间**: ${new Date(memory.created_at).toLocaleString('zh-CN')}\n`;
+      if (memory.updated_at !== memory.created_at) {
+        markdown += `**更新时间**: ${new Date(memory.updated_at).toLocaleString('zh-CN')}\n`;
+      }
+      if (memory.tags) {
+        const tags = memory.tags.split(',').filter(Boolean);
+        if (tags.length > 0) {
+          markdown += `**标签**: ${tags.map(t => '#' + t).join(' ')}\n`;
+        }
+      }
+      markdown += `**互动**: 👍 ${memory.likes_count || 0} | 🔖 ${memory.bookmarks_count || 0} | 💬 ${memory.comments_count || 0}\n\n`;
+      markdown += `### 内容\n\n${memory.content}\n\n`;
+      markdown += `---\n\n`;
+    });
+
+    markdown += `\n*由 OpenClaw Memory Share 导出*\n`;
+
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="memories-${user.username}-${new Date().toISOString().split('T')[0]}.md"`);
+    res.send(markdown);
+  } catch (error) {
+    console.error('导出记忆错误:', error);
+    res.status(500).json({ error: '导出失败' });
+  }
+});
+
 // Update user profile
 app.put('/api/user/profile', authMiddleware, (req, res) => {
   const { avatar } = req.body;

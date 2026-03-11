@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
@@ -103,6 +103,37 @@ const UserProfile = ({ onClose }) => {
     setEditTitle('');
     setEditContent('');
     setEditTags('');
+  };
+
+  const handleExport = async (format = 'markdown') => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/user/export?format=${format}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.error || '导出失败');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/"/g, '') || `memories-export.${format === 'json' ? 'json' : 'md'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('导出成功！');
+    } catch (err) {
+      console.error('导出失败:', err);
+      toast.error('导出失败');
+    }
   };
 
   const formatDate = (dateString) => {
