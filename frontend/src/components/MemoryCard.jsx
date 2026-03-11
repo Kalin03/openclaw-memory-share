@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
@@ -9,6 +9,13 @@ import AddToSeriesModal from './AddToSeriesModal';
 
 const API_URL = '/api';
 const BASE_URL = window.location.origin;
+
+// 可见性配置
+const visibilityConfig = {
+  public: { icon: Globe, label: '公开', color: 'text-green-500' },
+  followers: { icon: Users, label: '仅关注者', color: 'text-blue-500' },
+  private: { icon: Lock, label: '私密', color: 'text-gray-500' }
+};
 
 const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
   const { user } = useAuth();
@@ -325,6 +332,18 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
       >
         {memory.title}
         <ExternalLink size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+        {/* 可见性标识 */}
+        {memory.visibility && memory.visibility !== 'public' && (() => {
+          const config = visibilityConfig[memory.visibility];
+          if (!config) return null;
+          const Icon = config.icon;
+          return (
+            <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${config.color}`} style={{ backgroundColor: 'var(--bg-tertiary)' }} title={config.label}>
+              <Icon size={12} />
+              <span className="hidden sm:inline">{config.label}</span>
+            </span>
+          );
+        })()}
       </h3>
 
       {/* Content */}

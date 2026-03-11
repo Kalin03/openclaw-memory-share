@@ -124,6 +124,18 @@ async function initDB() {
     console.log('is_pinned column check/creation skipped:', e.message);
   }
 
+  // 添加 visibility 字段（如果不存在）
+  try {
+    const columns = db.exec("PRAGMA table_info(memories)");
+    const hasVisibility = columns[0]?.values?.some(col => col[1] === 'visibility');
+    if (!hasVisibility) {
+      db.run("ALTER TABLE memories ADD COLUMN visibility TEXT DEFAULT 'public'");
+      console.log('Added visibility column to memories table');
+    }
+  } catch (e) {
+    console.log('visibility column check/creation skipped:', e.message);
+  }
+
   // 创建签到表
   db.run(`
     CREATE TABLE IF NOT EXISTS sign_ins (
@@ -344,29 +356,38 @@ app.get('/api/memories/search', (req, res) => {
     let total;
 
     if (userId) {
+      // 已登录：搜索公开的 + 自己的 + 关注者的 followers 可见
       memories = getAll(`
         SELECT m.*, u.username, u.avatar,
           EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
           EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
         FROM memories m
         JOIN users u ON m.user_id = u.id
-        WHERE m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?
+        LEFT JOIN follows f ON m.user_id = f.following_id AND f.follower_id = ?
+        WHERE (m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?)
+          AND (m.visibility = 'public' OR m.user_id = ? OR (m.visibility = 'followers' AND f.id IS NOT NULL))
         ORDER BY m.created_at DESC
         LIMIT ? OFFSET ?
-      `, [userId, userId, searchTerm, searchTerm, searchTerm, limit, offset]);
-      const totalResult = getOne('SELECT COUNT(*) as count FROM memories WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?', [searchTerm, searchTerm, searchTerm]);
+      `, [userId, userId, userId, searchTerm, searchTerm, searchTerm, userId, limit, offset]);
+      const totalResult = getOne(`
+        SELECT COUNT(*) as count FROM memories m
+        LEFT JOIN follows f ON m.user_id = f.following_id AND f.follower_id = ?
+        WHERE (m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?)
+          AND (m.visibility = 'public' OR m.user_id = ? OR (m.visibility = 'followers' AND f.id IS NOT NULL))
+      `, [userId, searchTerm, searchTerm, searchTerm, userId]);
       total = totalResult.count;
     } else {
+      // 未登录：只能搜索公开的记忆
       memories = getAll(`
         SELECT m.*, u.username, u.avatar
         FROM memories m
         JOIN users u ON m.user_id = u.id
-        WHERE m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?
+        WHERE (m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?) AND m.visibility = 'public'
         ORDER BY m.created_at DESC
         LIMIT ? OFFSET ?
       `, [searchTerm, searchTerm, searchTerm, limit, offset]);
       memories = memories.map(m => ({ ...m, is_liked: false, is_bookmarked: false }));
-      const totalResult = getOne('SELECT COUNT(*) as count FROM memories WHERE title LIKE ? OR content LIKE ? OR tags LIKE ?', [searchTerm, searchTerm, searchTerm]);
+      const totalResult = getOne("SELECT COUNT(*) as count FROM memories WHERE (title LIKE ? OR content LIKE ? OR tags LIKE ?) AND visibility = 'public'", [searchTerm, searchTerm, searchTerm]);
       total = totalResult.count;
     }
 
@@ -434,6 +455,7 @@ app.get('/api/memories/random', (req, res) => {
           EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
         FROM memories m
         JOIN users u ON m.user_id = u.id
+        WHERE m.visibility = 'public'
         ORDER BY RANDOM()
         LIMIT 1
       `, [userId, userId]);
@@ -442,6 +464,7 @@ app.get('/api/memories/random', (req, res) => {
         SELECT m.*, u.username, u.avatar
         FROM memories m
         JOIN users u ON m.user_id = u.id
+        WHERE m.visibility = 'public'
         ORDER BY RANDOM()
         LIMIT 1
       `);
@@ -475,6 +498,7 @@ app.get('/api/memories/hot', (req, res) => {
 
     // 热度算法：likes * 3 + bookmarks * 2 + comments * 1
     // 加上时间衰减因子（7天内加权，超过7天逐渐衰减）
+    // 只显示公开的记忆
     if (userId) {
       memories = getAll(`
         SELECT m.*, u.username, u.avatar,
@@ -492,10 +516,11 @@ app.get('/api/memories/hot', (req, res) => {
           ) as hot_score
         FROM memories m
         JOIN users u ON m.user_id = u.id
+        WHERE m.visibility = 'public'
         ORDER BY hot_score DESC, m.created_at DESC
         LIMIT ? OFFSET ?
       `, [userId, userId, limit, offset]);
-      const totalResult = getOne('SELECT COUNT(*) as count FROM memories');
+      const totalResult = getOne("SELECT COUNT(*) as count FROM memories WHERE visibility = 'public'");
       total = totalResult.count;
     } else {
       memories = getAll(`
@@ -514,11 +539,12 @@ app.get('/api/memories/hot', (req, res) => {
           ) as hot_score
         FROM memories m
         JOIN users u ON m.user_id = u.id
+        WHERE m.visibility = 'public'
         ORDER BY hot_score DESC, m.created_at DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
       memories = memories.map(m => ({ ...m, is_liked: false, is_bookmarked: false }));
-      const totalResult = getOne('SELECT COUNT(*) as count FROM memories');
+      const totalResult = getOne("SELECT COUNT(*) as count FROM memories WHERE visibility = 'public'");
       total = totalResult.count;
     }
 
@@ -549,27 +575,40 @@ app.get('/api/memories', (req, res) => {
     let total;
 
     if (userId) {
+      // 已登录用户：可以看到 public 的 + 自己的所有记忆 + 关注者的 followers 记忆
       memories = getAll(`
         SELECT m.*, u.username, u.avatar,
           EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
           EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
         FROM memories m
         JOIN users u ON m.user_id = u.id
-        ORDER BY m.created_at DESC
+        LEFT JOIN follows f ON m.user_id = f.following_id AND f.follower_id = ?
+        WHERE m.visibility = 'public' 
+          OR m.user_id = ? 
+          OR (m.visibility = 'followers' AND f.id IS NOT NULL)
+        ORDER BY m.is_pinned DESC, m.created_at DESC
         LIMIT ? OFFSET ?
-      `, [userId, userId, limit, offset]);
-      const totalResult = getOne('SELECT COUNT(*) as count FROM memories');
+      `, [userId, userId, userId, userId, limit, offset]);
+      const totalResult = getOne(`
+        SELECT COUNT(*) as count FROM memories m
+        LEFT JOIN follows f ON m.user_id = f.following_id AND f.follower_id = ?
+        WHERE m.visibility = 'public' 
+          OR m.user_id = ? 
+          OR (m.visibility = 'followers' AND f.id IS NOT NULL)
+      `, [userId, userId]);
       total = totalResult.count;
     } else {
+      // 未登录用户：只能看到 public 的记忆
       memories = getAll(`
         SELECT m.*, u.username, u.avatar
         FROM memories m
         JOIN users u ON m.user_id = u.id
-        ORDER BY m.created_at DESC
+        WHERE m.visibility = 'public'
+        ORDER BY m.is_pinned DESC, m.created_at DESC
         LIMIT ? OFFSET ?
       `, [limit, offset]);
       memories = memories.map(m => ({ ...m, is_liked: false, is_bookmarked: false }));
-      const totalResult = getOne('SELECT COUNT(*) as count FROM memories');
+      const totalResult = getOne("SELECT COUNT(*) as count FROM memories WHERE visibility = 'public'");
       total = totalResult.count;
     }
 
@@ -596,7 +635,7 @@ app.get('/api/memories/following', authMiddleware, (req, res) => {
   const offset = (page - 1) * limit;
 
   try {
-    // 获取关注用户的记忆
+    // 获取关注用户的记忆（公开的 + 仅关注者可见的）
     const memories = getAll(`
       SELECT m.*, u.username, u.avatar,
         EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
@@ -604,7 +643,7 @@ app.get('/api/memories/following', authMiddleware, (req, res) => {
       FROM memories m
       JOIN users u ON m.user_id = u.id
       JOIN follows f ON m.user_id = f.following_id
-      WHERE f.follower_id = ?
+      WHERE f.follower_id = ? AND (m.visibility = 'public' OR m.visibility = 'followers')
       ORDER BY m.created_at DESC
       LIMIT ? OFFSET ?
     `, [userId, userId, userId, limit, offset]);
@@ -613,7 +652,7 @@ app.get('/api/memories/following', authMiddleware, (req, res) => {
       SELECT COUNT(*) as count 
       FROM memories m
       JOIN follows f ON m.user_id = f.following_id
-      WHERE f.follower_id = ?
+      WHERE f.follower_id = ? AND (m.visibility = 'public' OR m.visibility = 'followers')
     `, [userId]);
     const total = totalResult?.count || 0;
 
@@ -665,6 +704,21 @@ app.get('/api/memories/:id', (req, res) => {
       return res.status(404).json({ error: '记忆不存在' });
     }
 
+    // 检查访问权限
+    const visibility = memory.visibility || 'public';
+    if (visibility === 'private' && memory.user_id !== userId) {
+      return res.status(403).json({ error: '这是一条私密记忆' });
+    }
+    if (visibility === 'followers' && memory.user_id !== userId) {
+      if (!userId) {
+        return res.status(403).json({ error: '请登录后查看' });
+      }
+      const isFollowing = getOne('SELECT id FROM follows WHERE follower_id = ? AND following_id = ?', [userId, memory.user_id]);
+      if (!isFollowing) {
+        return res.status(403).json({ error: '仅关注者可见' });
+      }
+    }
+
     // 增加阅读量
     runQuery('UPDATE memories SET views_count = COALESCE(views_count, 0) + 1 WHERE id = ?', [id]);
     memory.views_count = (memory.views_count || 0) + 1;
@@ -691,17 +745,21 @@ app.get('/api/memories/:id', (req, res) => {
 
 // Create memory
 app.post('/api/memories', authMiddleware, (req, res) => {
-  const { title, content, tags } = req.body;
+  const { title, content, tags, visibility } = req.body;
 
   if (!title || !content) {
     return res.status(400).json({ error: '标题和内容都是必填项' });
   }
 
+  // 验证 visibility 值
+  const validVisibility = ['public', 'private', 'followers'];
+  const memoryVisibility = validVisibility.includes(visibility) ? visibility : 'public';
+
   try {
     const memoryId = uuidv4();
     const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
 
-    runQuery('INSERT INTO memories (id, user_id, title, content, tags) VALUES (?, ?, ?, ?, ?)', [memoryId, req.user.id, title, content, tagsStr]);
+    runQuery('INSERT INTO memories (id, user_id, title, content, tags, visibility) VALUES (?, ?, ?, ?, ?, ?)', [memoryId, req.user.id, title, content, tagsStr, memoryVisibility]);
 
     const memory = getOne(`
       SELECT m.*, u.username, u.avatar
@@ -720,7 +778,7 @@ app.post('/api/memories', authMiddleware, (req, res) => {
 // Update memory
 app.put('/api/memories/:id', authMiddleware, (req, res) => {
   const { id } = req.params;
-  const { title, content, tags } = req.body;
+  const { title, content, tags, visibility } = req.body;
 
   try {
     const memory = getOne('SELECT * FROM memories WHERE id = ?', [id]);
@@ -732,8 +790,12 @@ app.put('/api/memories/:id', authMiddleware, (req, res) => {
       return res.status(403).json({ error: '无权修改此记忆' });
     }
 
+    // 验证 visibility 值
+    const validVisibility = ['public', 'private', 'followers'];
+    const newVisibility = validVisibility.includes(visibility) ? visibility : memory.visibility;
+
     const tagsStr = Array.isArray(tags) ? tags.join(',') : (tags || '');
-    runQuery('UPDATE memories SET title = ?, content = ?, tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [title || memory.title, content || memory.content, tagsStr, id]);
+    runQuery('UPDATE memories SET title = ?, content = ?, tags = ?, visibility = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [title || memory.title, content || memory.content, tagsStr, newVisibility, id]);
 
     const updatedMemory = getOne(`
       SELECT m.*, u.username, u.avatar

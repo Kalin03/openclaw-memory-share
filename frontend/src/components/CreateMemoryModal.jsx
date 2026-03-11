@@ -2,9 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag, Save } from 'lucide-react';
+import { X, FileText, Tag, Save, Globe, Lock, Users } from 'lucide-react';
 
 const DRAFT_KEY = 'memory-share-draft';
+
+const visibilityOptions = [
+  { value: 'public', label: '公开', icon: Globe, description: '所有人可见' },
+  { value: 'followers', label: '仅关注者', icon: Users, description: '仅关注你的人可见' },
+  { value: 'private', label: '私密', icon: Lock, description: '仅自己可见' }
+];
 
 const CreateMemoryModal = ({ onClose }) => {
   const { user } = useAuth();
@@ -15,7 +21,8 @@ const CreateMemoryModal = ({ onClose }) => {
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    tags: ''
+    tags: '',
+    visibility: 'public'
   });
 
   // Load draft on mount
@@ -25,7 +32,12 @@ const CreateMemoryModal = ({ onClose }) => {
       try {
         const draft = JSON.parse(savedDraft);
         if (draft.title || draft.content || draft.tags) {
-          setFormData(draft);
+          setFormData({
+            title: draft.title || '',
+            content: draft.content || '',
+            tags: draft.tags || '',
+            visibility: draft.visibility || 'public'
+          });
           setHasDraft(true);
           toast.info('已恢复上次未发布的草稿');
         }
@@ -60,7 +72,8 @@ const CreateMemoryModal = ({ onClose }) => {
       await createMemory({
         title: formData.title,
         content: formData.content,
-        tags
+        tags,
+        visibility: formData.visibility
       });
       clearDraft();
       onClose();
@@ -73,7 +86,7 @@ const CreateMemoryModal = ({ onClose }) => {
 
   const handleClearDraft = () => {
     if (window.confirm('确定要清除草稿吗？')) {
-      setFormData({ title: '', content: '', tags: '' });
+      setFormData({ title: '', content: '', tags: '', visibility: 'public' });
       clearDraft();
       toast.success('草稿已清除');
     }
@@ -142,6 +155,40 @@ const CreateMemoryModal = ({ onClose }) => {
               value={formData.tags}
               onChange={(e) => setFormData({...formData, tags: e.target.value})}
             />
+          </div>
+
+          {/* 可见性选择 */}
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+              可见性设置
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {visibilityOptions.map(option => {
+                const Icon = option.icon;
+                const isSelected = formData.visibility === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData({...formData, visibility: option.value})}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      isSelected 
+                        ? 'border-primary bg-primary/10' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    style={{ backgroundColor: isSelected ? 'rgba(232, 87, 43, 0.1)' : 'var(--bg-secondary)' }}
+                  >
+                    <Icon className={`w-5 h-5 mx-auto mb-1 ${isSelected ? 'text-primary' : ''}`} style={{ color: isSelected ? '#e8572b' : 'var(--text-secondary)' }} />
+                    <div className={`text-sm font-medium ${isSelected ? 'text-primary' : ''}`} style={{ color: isSelected ? '#e8572b' : 'var(--text-primary)' }}>
+                      {option.label}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {option.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">

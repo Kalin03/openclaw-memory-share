@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag } from 'lucide-react';
+import { X, FileText, Tag, Globe, Lock, Users } from 'lucide-react';
+
+const visibilityOptions = [
+  { value: 'public', label: '公开', icon: Globe, description: '所有人可见' },
+  { value: 'followers', label: '仅关注者', icon: Users, description: '仅关注你的人可见' },
+  { value: 'private', label: '私密', icon: Lock, description: '仅自己可见' }
+];
 
 const EditMemoryModal = ({ memory, onClose }) => {
   const { updateMemory } = useMemories();
@@ -10,7 +16,8 @@ const EditMemoryModal = ({ memory, onClose }) => {
   const [formData, setFormData] = useState({
     title: memory?.title || '',
     content: memory?.content || '',
-    tags: memory?.tags || ''
+    tags: memory?.tags || '',
+    visibility: memory?.visibility || 'public'
   });
 
   useEffect(() => {
@@ -18,7 +25,8 @@ const EditMemoryModal = ({ memory, onClose }) => {
       setFormData({
         title: memory.title || '',
         content: memory.content || '',
-        tags: memory.tags || ''
+        tags: memory.tags || '',
+        visibility: memory.visibility || 'public'
       });
     }
   }, [memory]);
@@ -32,7 +40,8 @@ const EditMemoryModal = ({ memory, onClose }) => {
       await updateMemory(memory.id, {
         title: formData.title,
         content: formData.content,
-        tags
+        tags,
+        visibility: formData.visibility
       });
       toast.success('记忆更新成功！');
       onClose();
@@ -102,6 +111,39 @@ const EditMemoryModal = ({ memory, onClose }) => {
               value={formData.tags}
               onChange={(e) => setFormData({...formData, tags: e.target.value})}
             />
+          </div>
+
+          {/* 可见性选择 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              可见性设置
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {visibilityOptions.map(option => {
+                const Icon = option.icon;
+                const isSelected = formData.visibility === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setFormData({...formData, visibility: option.value})}
+                    className={`p-3 rounded-xl border-2 transition-all ${
+                      isSelected 
+                        ? 'border-primary bg-primary/10' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 mx-auto mb-1 ${isSelected ? 'text-primary' : 'text-gray-500'}`} />
+                    <div className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-gray-700'}`}>
+                      {option.label}
+                    </div>
+                    <div className="text-xs mt-0.5 text-gray-500">
+                      {option.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex gap-3 pt-4">
