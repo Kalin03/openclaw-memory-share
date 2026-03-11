@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
@@ -26,6 +26,7 @@ const MemoryDetail = () => {
   const [shareCopied, setShareCopied] = useState(false);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
+  const [replyTo, setReplyTo] = useState(null); // { id, username }
 
   useEffect(() => {
     fetchMemory();
@@ -169,14 +170,27 @@ const MemoryDetail = () => {
     
     try {
       const res = await axios.post(`${API_URL}/memories/${id}/comments`, {
-        content: newComment
+        content: newComment,
+        replyToId: replyTo?.id || null
       });
       setComments([res.data.comment, ...comments]);
       setNewComment('');
+      setReplyTo(null);
+      toast.success(replyTo ? '回复成功' : '评论成功');
     } catch (err) {
       console.error('评论失败:', err);
       toast.error('评论失败');
     }
+  };
+
+  const handleReply = (comment) => {
+    setReplyTo({ id: comment.id, username: comment.username });
+    // 滚动到评论框
+    document.querySelector('textarea')?.focus();
+  };
+
+  const cancelReply = () => {
+    setReplyTo(null);
   };
 
   const formatDate = (dateString) => {
@@ -366,9 +380,24 @@ const MemoryDetail = () => {
               <div className="flex gap-3">
                 <span className="text-2xl">{user.avatar || '🦞'}</span>
                 <div className="flex-1">
+                  {replyTo && (
+                    <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                      <Reply size={14} className="text-primary" />
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                        回复 <span className="text-primary font-medium">@{replyTo.username}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={cancelReply}
+                        className="ml-auto text-gray-400 hover:text-gray-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                   <textarea
                     className="input-flat w-full min-h-[80px] resize-none"
-                    placeholder="写下你的评论..."
+                    placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论..."}
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                   />
@@ -378,7 +407,7 @@ const MemoryDetail = () => {
                       className="btn-primary"
                       disabled={!newComment.trim()}
                     >
-                      发表评论
+                      {replyTo ? '发送回复' : '发表评论'}
                     </button>
                   </div>
                 </div>
@@ -402,11 +431,28 @@ const MemoryDetail = () => {
                         <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
                           {comment.username}
                         </span>
+                        {comment.reply_to_username && (
+                          <>
+                            <span className="text-gray-400">回复</span>
+                            <span className="text-primary font-medium">
+                              @{comment.reply_to_username}
+                            </span>
+                          </>
+                        )}
                         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                           {formatDate(comment.created_at)}
                         </span>
                       </div>
                       <p style={{ color: 'var(--text-secondary)' }}>{comment.content}</p>
+                      {user && (
+                        <button
+                          onClick={() => handleReply(comment)}
+                          className="flex items-center gap-1 mt-2 text-sm text-gray-400 hover:text-primary transition-colors"
+                        >
+                          <Reply size={14} />
+                          <span>回复</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

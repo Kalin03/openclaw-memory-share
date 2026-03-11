@@ -83,6 +83,7 @@ async function initDB() {
       user_id TEXT NOT NULL,
       memory_id TEXT NOT NULL,
       content TEXT NOT NULL,
+      reply_to_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -97,6 +98,18 @@ async function initDB() {
     }
   } catch (e) {
     console.log('views_count column check/creation skipped:', e.message);
+  }
+
+  // 添加 comments 表的 reply_to_id 字段（如果不存在）
+  try {
+    const commentColumns = db.exec("PRAGMA table_info(comments)");
+    const hasReplyToId = commentColumns[0]?.values?.some(col => col[1] === 'reply_to_id');
+    if (!hasReplyToId) {
+      db.run('ALTER TABLE comments ADD COLUMN reply_to_id TEXT');
+      console.log('Added reply_to_id column to comments table');
+    }
+  } catch (e) {
+    console.log('reply_to_id column check/creation skipped:', e.message);
   }
 
   // 创建签到表
@@ -619,9 +632,13 @@ app.get('/api/memories/:id', (req, res) => {
 
     // Get comments
     const comments = getAll(`
-      SELECT c.*, u.username, u.avatar
+      SELECT c.*, u.username, u.avatar, 
+        reply_to.reply_to_id as reply_to_comment_id,
+        reply_user.username as reply_to_username
       FROM comments c
       JOIN users u ON c.user_id = u.id
+      LEFT JOIN comments reply_to ON c.reply_to_id = reply_to.id
+      LEFT JOIN users reply_user ON reply_to.user_id = reply_user.id
       WHERE c.memory_id = ?
       ORDER BY c.created_at DESC
     `, [id]);
@@ -828,7 +845,7 @@ app.get('/api/user/bookmarks', authMiddleware, (req, res) => {
 // Add comment
 app.post('/api/memories/:id/comments', authMiddleware, (req, res) => {
   const { id } = req.params;
-  const { content } = req.body;
+  const { content, replyToId } = req.body;
 
   if (!content) {
     return res.status(400).json({ error: '评论内容不能为空' });
@@ -836,26 +853,44 @@ app.post('/api/memories/:id/comments', authMiddleware, (req, res) => {
 
   try {
     const commentId = uuidv4();
-    runQuery('INSERT INTO comments (id, user_id, memory_id, content) VALUES (?, ?, ?, ?)', [commentId, req.user.id, id, content]);
+    runQuery('INSERT INTO comments (id, user_id, memory_id, content, reply_to_id) VALUES (?, ?, ?, ?, ?)', 
+      [commentId, req.user.id, id, content, replyToId || null]);
     runQuery('UPDATE memories SET comments_count = comments_count + 1 WHERE id = ?', [id]);
 
     // 创建评论通知
     const memory = getOne('SELECT m.title, m.user_id FROM memories m WHERE m.id = ?', [id]);
     const commenter = getOne('SELECT username FROM users WHERE id = ?', [req.user.id]);
-    if (memory && memory.user_id !== req.user.id) {
+    
+    // 如果是回复评论，通知被回复的用户
+    let notifyUserId = memory?.user_id;
+    let notifyContent = `${commenter?.username || '有人'} 评论了你的记忆《${memory?.title}》`;
+    
+    if (replyToId) {
+      const replyToComment = getOne('SELECT c.user_id, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.id = ?', [replyToId]);
+      if (replyToComment && replyToComment.user_id !== req.user.id) {
+        notifyUserId = replyToComment.user_id;
+        notifyContent = `${commenter?.username || '有人'} 回复了你在《${memory?.title}》中的评论`;
+      }
+    }
+    
+    if (memory && notifyUserId !== req.user.id) {
       createNotification(
-        memory.user_id,
+        notifyUserId,
         'comment',
         '收到新的评论',
-        `${commenter?.username || '有人'} 评论了你的记忆《${memory.title}》`,
-        { memoryId: id, commentId, type: 'comment' }
+        notifyContent,
+        { memoryId: id, commentId, type: replyToId ? 'reply' : 'comment' }
       );
     }
 
     const comment = getOne(`
-      SELECT c.*, u.username, u.avatar
+      SELECT c.*, u.username, u.avatar, 
+        reply_to.reply_to_id as reply_to_comment_id,
+        reply_user.username as reply_to_username
       FROM comments c
       JOIN users u ON c.user_id = u.id
+      LEFT JOIN comments reply_to ON c.reply_to_id = reply_to.id
+      LEFT JOIN users reply_user ON reply_to.user_id = reply_user.id
       WHERE c.id = ?
     `, [commentId]);
 
