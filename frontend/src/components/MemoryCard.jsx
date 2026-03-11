@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2 } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
@@ -11,6 +12,7 @@ const BASE_URL = window.location.origin;
 const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
   const { user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(memory.is_liked);
   const [isBookmarked, setIsBookmarked] = useState(memory.is_bookmarked);
   const [likesCount, setLikesCount] = useState(memory.likes_count);
@@ -235,7 +237,15 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
       </div>
 
       {/* Title */}
-      <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>{memory.title}</h3>
+      <h3 
+        className="text-xl font-bold mb-3 cursor-pointer hover:text-primary transition-colors group flex items-center gap-2" 
+        style={{ color: 'var(--text-primary)' }}
+        onClick={() => navigate(`/memory/${memory.id}`)}
+        title="点击查看详情"
+      >
+        {memory.title}
+        <ExternalLink size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+      </h3>
 
       {/* Content */}
       <div className="prose prose-sm max-w-none mb-4" style={{ color: 'var(--text-secondary)' }}>

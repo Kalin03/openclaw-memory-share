@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useSearchParams, useNavigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import MemoryCard from './components/MemoryCard';
 import MemoryCardSkeleton from './components/MemoryCardSkeleton';
@@ -9,24 +10,47 @@ import UserProfile from './components/UserProfile';
 import RandomMemory from './components/RandomMemory';
 import TagCloud from './components/TagCloud';
 import BackToTop from './components/BackToTop';
+import MemoryDetail from './components/MemoryDetail';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2 } from 'lucide-react';
 
-const AppContent = () => {
+const Home = () => {
   const { loading: authLoading } = useAuth();
   const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory, fetchHotMemories } = useMemories();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editingMemory, setEditingMemory] = useState(null);
-  const [activeTab, setActiveTab] = useState('latest'); // 'latest' or 'hot'
+  const [activeTab, setActiveTab] = useState('latest');
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
+  // 处理 URL 参数：search 和 edit
   useEffect(() => {
-    fetchMemories(1);
-  }, []);
+    const searchParam = searchParams.get('search');
+    const editParam = searchParams.get('edit');
+    
+    if (searchParam) {
+      searchMemories(searchParam, 1);
+    } else {
+      fetchMemories(1);
+    }
+    
+    // 处理编辑模式：从 URL 获取记忆 ID 并打开编辑弹窗
+    if (editParam) {
+      // 需要先获取记忆详情
+      import('axios').then(axios => {
+        axios.default.get(`/api/memories/${editParam}`).then(res => {
+          setEditingMemory(res.data);
+        }).catch(err => {
+          console.error('获取记忆失败:', err);
+        });
+      });
+    }
+  }, [searchParams]);
 
   const handleDelete = async (id) => {
     if (window.confirm('确定要删除这条记忆吗？')) {
@@ -40,14 +64,14 @@ const AppContent = () => {
 
   const handleSearch = (query) => {
     if (query) {
-      searchMemories(query, 1);
+      navigate(`/?search=${encodeURIComponent(query)}`);
     } else {
-      fetchMemories(1);
+      navigate('/');
     }
   };
 
   const handleTagClick = (tag) => {
-    searchMemories(tag, 1);
+    navigate(`/?search=${encodeURIComponent(tag)}`);
   };
 
   const handleTabChange = (tab) => {
@@ -61,7 +85,7 @@ const AppContent = () => {
 
   const handlePageChange = (newPage) => {
     if (isSearchMode) {
-      searchMemories(searchQuery, newPage);
+      navigate(`/?search=${encodeURIComponent(searchQuery)}&page=${newPage}`);
     } else if (activeTab === 'latest') {
       fetchMemories(newPage);
     } else {
@@ -145,7 +169,7 @@ const AppContent = () => {
                   <span>搜索 "{searchQuery}" 的结果：{memories.length} 条</span>
                 </div>
                 <button
-                  onClick={() => fetchMemories(1)}
+                  onClick={() => navigate('/')}
                   className="text-primary hover:underline"
                 >
                   清除搜索
@@ -174,7 +198,7 @@ const AppContent = () => {
                   </>
                 )}
                 <button
-                  onClick={() => fetchMemories(1)}
+                  onClick={() => navigate('/')}
                   className="btn-primary"
                 >
                   查看全部记忆
@@ -249,7 +273,10 @@ const AppContent = () => {
       {/* Modals */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} />}
       {showCreateModal && <CreateMemoryModal onClose={() => setShowCreateModal(false)} />}
-      {editingMemory && <EditMemoryModal memory={editingMemory} onClose={() => setEditingMemory(null)} />}
+      {editingMemory && <EditMemoryModal memory={editingMemory} onClose={() => {
+        setEditingMemory(null);
+        navigate(window.location.pathname);
+      }} />}
       {showProfileModal && <UserProfile onClose={() => setShowProfileModal(false)} />}
       
       {/* Back to Top Button */}
@@ -264,7 +291,10 @@ const App = () => {
       <AuthProvider>
         <MemoriesProvider>
           <ToastProvider>
-            <AppContent />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/memory/:id" element={<MemoryDetail />} />
+            </Routes>
           </ToastProvider>
         </MemoriesProvider>
       </AuthProvider>
