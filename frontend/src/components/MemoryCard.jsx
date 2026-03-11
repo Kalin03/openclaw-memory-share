@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { highlightText } from '../utils/highlight';
 import axios from 'axios';
 import AddToSeriesModal from './AddToSeriesModal';
 
@@ -17,7 +18,7 @@ const visibilityConfig = {
   private: { icon: Lock, label: '私密', color: 'text-gray-500' }
 };
 
-const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
+const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -330,7 +331,11 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
         onClick={() => navigate(`/memory/${memory.id}`)}
         title="点击查看详情"
       >
-        {memory.title}
+        <span 
+          dangerouslySetInnerHTML={{ 
+            __html: searchQuery ? highlightText(memory.title, searchQuery) : memory.title 
+          }} 
+        />
         <ExternalLink size={16} className="opacity-0 group-hover:opacity-100 transition-opacity" />
         {/* 可见性标识 */}
         {memory.visibility && memory.visibility !== 'public' && (() => {
@@ -348,7 +353,24 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
 
       {/* Content */}
       <div className="prose prose-sm max-w-none mb-4" style={{ color: 'var(--text-secondary)' }}>
-        <ReactMarkdown>{memory.content}</ReactMarkdown>
+        {searchQuery ? (
+          <ReactMarkdown
+            components={{
+              // 自定义文本节点渲染，实现高亮
+              text: ({ children }) => {
+                const text = children;
+                if (typeof text === 'string' && text.toLowerCase().includes(searchQuery.toLowerCase())) {
+                  return <span dangerouslySetInnerHTML={{ __html: highlightText(text, searchQuery) }} />;
+                }
+                return <span>{text}</span>;
+              }
+            }}
+          >
+            {memory.content}
+          </ReactMarkdown>
+        ) : (
+          <ReactMarkdown>{memory.content}</ReactMarkdown>
+        )}
       </div>
 
       {/* Tags */}
@@ -359,9 +381,10 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
               key={index}
               onClick={() => onTagClick && onTagClick(tag)}
               className="tag hover:bg-primary/20 hover:text-primary cursor-pointer transition-colors"
-            >
-              #{tag}
-            </button>
+              dangerouslySetInnerHTML={{ 
+                __html: searchQuery ? highlightText(`#${tag}`, searchQuery) : `#${tag}` 
+              }}
+            />
           ))}
         </div>
       )}

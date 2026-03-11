@@ -82,6 +82,20 @@ body {
   color: var(--text-secondary);
 }
 
+/* 搜索高亮样式 */
+mark.highlight {
+  background-color: #fef08a;
+  color: #854d0e;
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+.dark mark.highlight {
+  background-color: #854d0e;
+  color: #fef08a;
+}
+
 /* 计数徽章 */
 .badge {
   @apply px-2 py-1 rounded-full text-xs font-bold;

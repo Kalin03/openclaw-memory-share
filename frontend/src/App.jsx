@@ -247,6 +247,7 @@ const Home = () => {
                         onDelete={handleDelete}
                         onEdit={handleEdit}
                         onTagClick={handleTagClick}
+                        searchQuery={isSearchMode ? searchQuery : null}
                       />
                     </div>
                   ))}
