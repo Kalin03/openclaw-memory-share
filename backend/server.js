@@ -285,6 +285,40 @@ app.get('/api/memories/search', (req, res) => {
   }
 });
 
+// Get popular tags (热门标签)
+app.get('/api/tags/popular', (req, res) => {
+  const limit = parseInt(req.query.limit) || 20;
+
+  try {
+    // 获取所有记忆的标签
+    const memories = getAll('SELECT tags FROM memories WHERE tags IS NOT NULL AND tags != ""');
+    
+    // 统计标签出现次数
+    const tagCounts = {};
+    memories.forEach(memory => {
+      if (memory.tags) {
+        memory.tags.split(',').forEach(tag => {
+          const trimmedTag = tag.trim();
+          if (trimmedTag) {
+            tagCounts[trimmedTag] = (tagCounts[trimmedTag] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    // 排序并取前 N 个
+    const popularTags = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([name, count]) => ({ name, count }));
+
+    res.json({ tags: popularTags });
+  } catch (error) {
+    console.error('获取热门标签错误:', error);
+    res.status(500).json({ error: '获取热门标签失败' });
+  }
+});
+
 // Get random memory (随机回顾)
 app.get('/api/memories/random', (req, res) => {
   const userId = req.user?.id;

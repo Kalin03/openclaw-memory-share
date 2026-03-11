@@ -7,6 +7,7 @@ import CreateMemoryModal from './components/CreateMemoryModal';
 import EditMemoryModal from './components/EditMemoryModal';
 import UserProfile from './components/UserProfile';
 import RandomMemory from './components/RandomMemory';
+import TagCloud from './components/TagCloud';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
@@ -99,120 +100,136 @@ const AppContent = () => {
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
-        {/* Random Memory */}
-        {!isSearchMode && <RandomMemory onTagClick={handleTagClick} />}
-        
-        {/* Tab Switcher */}
-        {!isSearchMode && (
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={() => handleTabChange('latest')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                activeTab === 'latest'
-                  ? 'bg-primary text-white shadow-md'
-                  : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-              }`}
-            >
-              <Clock size={18} />
-              最新
-            </button>
-            <button
-              onClick={() => handleTabChange('hot')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                activeTab === 'hot'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md'
-                  : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
-              }`}
-            >
-              <Flame size={18} />
-              热门
-            </button>
-          </div>
-        )}
-        
-        {/* Search Results Header */}
-        {isSearchMode && (
-          <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-gray-600">
-              <Search size={20} />
-              <span>搜索 "{searchQuery}" 的结果：{memories.length} 条</span>
-            </div>
-            <button
-              onClick={() => fetchMemories(1)}
-              className="text-primary hover:underline"
-            >
-              清除搜索
-            </button>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="grid gap-6 md:grid-cols-2">
-            {[...Array(4)].map((_, i) => (
-              <MemoryCardSkeleton key={i} />
-            ))}
-          </div>
-        ) : memories.length === 0 ? (
-          <div className="text-center py-12">
-            <span className="text-6xl mb-4 block">🦞</span>
-            {isSearchMode ? (
-              <>
-                <h3 className="text-xl font-bold text-dark mb-2">没有找到相关记忆</h3>
-                <p className="text-gray-500 mb-6">试试其他关键词？</p>
-              </>
-            ) : (
-              <>
-                <h3 className="text-xl font-bold text-dark mb-2">还没有记忆</h3>
-                <p className="text-gray-500 mb-6">成为第一个分享记忆的人吧！</p>
-              </>
-            )}
-            <button
-              onClick={() => fetchMemories(1)}
-              className="btn-primary"
-            >
-              查看全部记忆
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="grid gap-6 md:grid-cols-2">
-              {memories.map(memory => (
-                <MemoryCard 
-                  key={memory.id} 
-                  memory={memory}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  onTagClick={handleTagClick}
-                />
-              ))}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-8">
+        <div className="flex gap-8">
+          {/* Left Content */}
+          <div className="flex-1 min-w-0">
+            {/* Random Memory */}
+            {!isSearchMode && <RandomMemory onTagClick={handleTagClick} />}
+            
+            {/* Tab Switcher */}
+            {!isSearchMode && (
+              <div className="flex gap-2 mb-6">
                 <button
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page === 1}
-                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleTabChange('latest')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    activeTab === 'latest'
+                      ? 'bg-primary text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50 border'
+                  }`}
+                  style={{ backgroundColor: activeTab === 'latest' ? undefined : 'var(--bg-primary)', borderColor: 'var(--border-color)' }}
                 >
-                  <ChevronLeft size={24} />
+                  <Clock size={18} />
+                  最新
                 </button>
-                
-                <span className="text-gray-600">
-                  第 {page} / {totalPages} 页
-                </span>
-                
                 <button
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page === totalPages}
-                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleTabChange('hot')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    activeTab === 'hot'
+                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-50 border'
+                  }`}
+                  style={{ backgroundColor: activeTab === 'hot' ? undefined : 'var(--bg-primary)', borderColor: 'var(--border-color)' }}
                 >
-                  <ChevronRight size={24} />
+                  <Flame size={18} />
+                  热门
                 </button>
               </div>
             )}
-          </>
-        )}
+            
+            {/* Search Results Header */}
+            {isSearchMode && (
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+                  <Search size={20} />
+                  <span>搜索 "{searchQuery}" 的结果：{memories.length} 条</span>
+                </div>
+                <button
+                  onClick={() => fetchMemories(1)}
+                  className="text-primary hover:underline"
+                >
+                  清除搜索
+                </button>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="grid gap-6 md:grid-cols-2">
+                {[...Array(4)].map((_, i) => (
+                  <MemoryCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : memories.length === 0 ? (
+              <div className="text-center py-12">
+                <span className="text-6xl mb-4 block">🦞</span>
+                {isSearchMode ? (
+                  <>
+                    <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>没有找到相关记忆</h3>
+                    <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>试试其他关键词？</p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>还没有记忆</h3>
+                    <p className="mb-6" style={{ color: 'var(--text-secondary)' }}>成为第一个分享记忆的人吧！</p>
+                  </>
+                )}
+                <button
+                  onClick={() => fetchMemories(1)}
+                  className="btn-primary"
+                >
+                  查看全部记忆
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-6 md:grid-cols-2">
+                  {memories.map(memory => (
+                    <MemoryCard 
+                      key={memory.id} 
+                      memory={memory}
+                      onDelete={handleDelete}
+                      onEdit={handleEdit}
+                      onTagClick={handleTagClick}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 mt-8">
+                    <button
+                      onClick={() => handlePageChange(page - 1)}
+                      disabled={page === 1}
+                      className="p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                    >
+                      <ChevronLeft size={24} />
+                    </button>
+                    
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      第 {page} / {totalPages} 页
+                    </span>
+                    
+                    <button
+                      onClick={() => handlePageChange(page + 1)}
+                      disabled={page === totalPages}
+                      className="p-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                    >
+                      <ChevronRight size={24} />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Right Sidebar */}
+          <aside className="hidden lg:block w-72 flex-shrink-0">
+            <div className="sticky top-24 space-y-6">
+              <TagCloud onTagClick={handleTagClick} />
+            </div>
+          </aside>
+        </div>
       </main>
 
       {/* Footer */}
