@@ -13,6 +13,7 @@ export const MemoriesProvider = ({ children }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [isHotMode, setIsHotMode] = useState(false);
+  const [isFollowingMode, setIsFollowingMode] = useState(false);
 
   const fetchMemories = async (pageNum = 1) => {
     setLoading(true);
@@ -23,6 +24,7 @@ export const MemoriesProvider = ({ children }) => {
       setTotalPages(res.data.pagination.totalPages);
       setIsSearchMode(false);
       setIsHotMode(false);
+      setIsFollowingMode(false);
       setSearchQuery('');
     } catch (error) {
       console.error('获取记忆列表失败:', error);
@@ -40,9 +42,37 @@ export const MemoriesProvider = ({ children }) => {
       setTotalPages(res.data.pagination.totalPages);
       setIsSearchMode(false);
       setIsHotMode(true);
+      setIsFollowingMode(false);
       setSearchQuery('');
     } catch (error) {
       console.error('获取热门记忆失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFollowingMemories = async (pageNum = 1) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/memories/following?page=${pageNum}&limit=10`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMemories(res.data.memories);
+      setPage(res.data.pagination.page);
+      setTotalPages(res.data.pagination.totalPages);
+      setIsSearchMode(false);
+      setIsHotMode(false);
+      setIsFollowingMode(true);
+      setSearchQuery('');
+    } catch (error) {
+      console.error('获取关注动态失败:', error);
+      // 如果未登录或没有关注任何人，显示空列表
+      if (error.response?.status === 401) {
+        setMemories([]);
+        setPage(1);
+        setTotalPages(1);
+      }
     } finally {
       setLoading(false);
     }
@@ -62,6 +92,7 @@ export const MemoriesProvider = ({ children }) => {
       setSearchQuery(query);
       setIsSearchMode(true);
       setIsHotMode(false);
+      setIsFollowingMode(false);
     } catch (error) {
       console.error('搜索失败:', error);
     } finally {
@@ -130,8 +161,8 @@ export const MemoriesProvider = ({ children }) => {
 
   return (
     <MemoriesContext.Provider value={{
-      memories, loading, page, totalPages, searchQuery, isSearchMode, isHotMode,
-      fetchMemories, fetchHotMemories, searchMemories, createMemory, updateMemory, deleteMemory, toggleLike, toggleBookmark
+      memories, loading, page, totalPages, searchQuery, isSearchMode, isHotMode, isFollowingMode,
+      fetchMemories, fetchHotMemories, fetchFollowingMemories, searchMemories, createMemory, updateMemory, deleteMemory, toggleLike, toggleBookmark
     }}>
       {children}
     </MemoriesContext.Provider>

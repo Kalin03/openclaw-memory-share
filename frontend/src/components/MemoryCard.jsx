@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
@@ -23,6 +23,51 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  // 检查关注状态
+  useEffect(() => {
+    if (user && memory.user_id && user.id !== memory.user_id) {
+      checkFollowStatus();
+    }
+  }, [user, memory.user_id]);
+
+  const checkFollowStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/user/following/${memory.user_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsFollowing(res.data.following);
+    } catch (err) {
+      console.error('检查关注状态失败:', err);
+    }
+  };
+
+  const handleFollow = async (e) => {
+    e.stopPropagation();
+    if (!user) {
+      toast.warning('请先登录');
+      return;
+    }
+    if (user.id === memory.user_id) return;
+    
+    setFollowLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_URL}/user/follow/${memory.user_id}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsFollowing(res.data.following);
+      toast.success(res.data.message);
+    } catch (err) {
+      console.error('关注操作失败:', err);
+      toast.error(err.response?.data?.error || '操作失败');
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const handleCopy = () => {
     // 使用传统方法确保兼容性
@@ -187,6 +232,31 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
         </div>
         
         <div className="flex items-center gap-2">
+          {/* 关注按钮 */}
+          {user && user.id !== memory.user_id && (
+            <button
+              onClick={handleFollow}
+              disabled={followLoading}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                isFollowing
+                  ? 'bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500'
+                  : 'bg-primary text-white hover:bg-primary/90'
+              }`}
+            >
+              {followLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : isFollowing ? (
+                <>
+                  <UserCheck size={14} /> 已关注
+                </>
+              ) : (
+                <>
+                  <UserPlus size={14} /> 关注
+                </>
+              )}
+            </button>
+          )}
+          
           <button
             onClick={handleCopy}
             className={`p-2 rounded-lg transition-colors ${

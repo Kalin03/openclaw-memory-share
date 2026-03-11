@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
 import axios from 'axios';
+import FollowList from './FollowList';
 
 const API_URL = '/api';
 
@@ -17,12 +18,14 @@ const UserProfile = ({ onClose }) => {
   const [bookmarks, setBookmarks] = useState([]);
   const [stats, setStats] = useState(null);
   const [checkinStatus, setCheckinStatus] = useState(null);
+  const [followStats, setFollowStats] = useState({ followingCount: 0, followersCount: 0 });
   const [loading, setLoading] = useState(true);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [editingMemory, setEditingMemory] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editTags, setEditTags] = useState('');
+  const [showFollowList, setShowFollowList] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -33,16 +36,18 @@ const UserProfile = ({ onClose }) => {
   const fetchUserData = async () => {
     setLoading(true);
     try {
-      const [memoriesRes, bookmarksRes, statsRes, checkinRes] = await Promise.all([
+      const [memoriesRes, bookmarksRes, statsRes, checkinRes, followStatsRes] = await Promise.all([
         axios.get(`${API_URL}/user/memories`),
         axios.get(`${API_URL}/user/bookmarks`),
         axios.get(`${API_URL}/user/stats`),
-        axios.get(`${API_URL}/user/checkin`)
+        axios.get(`${API_URL}/user/checkin`),
+        axios.get(`${API_URL}/user/follow-stats/${user.id}`)
       ]);
       setMemories(memoriesRes.data || []);
       setBookmarks(bookmarksRes.data || []);
       setStats(statsRes.data);
       setCheckinStatus(checkinRes.data);
+      setFollowStats(followStatsRes.data);
     } catch (err) {
       console.error('获取用户数据失败:', err);
     } finally {
@@ -230,6 +235,16 @@ const UserProfile = ({ onClose }) => {
               <span className="font-semibold text-dark">{stats?.totalBookmarks || 0}</span>
               <span className="text-gray-500 text-sm">被收藏</span>
             </div>
+            <button
+              onClick={() => setShowFollowList(true)}
+              className="flex items-center gap-2 hover:text-primary transition-colors cursor-pointer"
+            >
+              <Users size={18} className="text-purple-500" />
+              <span className="font-semibold text-dark">{followStats.followingCount}</span>
+              <span className="text-gray-500 text-sm">关注</span>
+              <span className="font-semibold text-dark">{followStats.followersCount}</span>
+              <span className="text-gray-500 text-sm">粉丝</span>
+            </button>
             {checkinStatus && (
               <>
                 <div className="flex items-center gap-2">
@@ -578,6 +593,15 @@ const UserProfile = ({ onClose }) => {
           )}
         </div>
       </div>
+      
+      {/* Follow List Modal */}
+      {showFollowList && (
+        <FollowList 
+          userId={user.id} 
+          username={user.username} 
+          onClose={() => setShowFollowList(false)} 
+        />
+      )}
     </div>
   );
 };

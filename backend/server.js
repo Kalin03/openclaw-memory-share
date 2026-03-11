@@ -111,6 +111,17 @@ async function initDB() {
     )
   `);
 
+  // 创建关注表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS follows (
+      id TEXT PRIMARY KEY,
+      follower_id TEXT NOT NULL,
+      following_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(follower_id, following_id)
+    )
+  `);
+
   saveDB();
 }
 
@@ -508,6 +519,50 @@ app.get('/api/memories', (req, res) => {
   } catch (error) {
     console.error('获取记忆列表错误:', error);
     res.status(500).json({ error: '获取记忆列表失败' });
+  }
+});
+
+// 获取关注的人的记忆（关注动态）- 必须在 /api/memories/:id 之前
+app.get('/api/memories/following', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
+  try {
+    // 获取关注用户的记忆
+    const memories = getAll(`
+      SELECT m.*, u.username, u.avatar,
+        EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
+        EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      JOIN follows f ON m.user_id = f.following_id
+      WHERE f.follower_id = ?
+      ORDER BY m.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, userId, userId, limit, offset]);
+
+    const totalResult = getOne(`
+      SELECT COUNT(*) as count 
+      FROM memories m
+      JOIN follows f ON m.user_id = f.following_id
+      WHERE f.follower_id = ?
+    `, [userId]);
+    const total = totalResult?.count || 0;
+
+    res.json({
+      memories,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取关注动态错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
 
@@ -1131,4 +1186,153 @@ initDB().then(() => {
 }).catch(err => {
   console.error('数据库初始化失败:', err);
   process.exit(1);
+});
+// ============ Follow Routes ============
+
+// 关注用户
+app.post('/api/user/follow/:targetId', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const targetId = req.params.targetId;
+
+  if (userId === targetId) {
+    return res.status(400).json({ error: '不能关注自己' });
+  }
+
+  try {
+    // 检查目标用户是否存在
+    const targetUser = getOne('SELECT id FROM users WHERE id = ?', [targetId]);
+    if (!targetUser) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    // 检查是否已关注
+    const existingFollow = getOne('SELECT * FROM follows WHERE follower_id = ? AND following_id = ?', [userId, targetId]);
+    
+    if (existingFollow) {
+      // 取消关注
+      runQuery('DELETE FROM follows WHERE id = ?', [existingFollow.id]);
+      res.json({ following: false, message: '已取消关注' });
+    } else {
+      // 关注
+      const followId = uuidv4();
+      runQuery('INSERT INTO follows (id, follower_id, following_id) VALUES (?, ?, ?)', [followId, userId, targetId]);
+      res.json({ following: true, message: '关注成功' });
+    }
+  } catch (error) {
+    console.error('关注操作错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// 检查是否关注某用户
+app.get('/api/user/following/:targetId', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const targetId = req.params.targetId;
+
+  try {
+    const follow = getOne('SELECT * FROM follows WHERE follower_id = ? AND following_id = ?', [userId, targetId]);
+    res.json({ following: !!follow });
+  } catch (error) {
+    console.error('检查关注状态错误:', error);
+    res.status(500).json({ error: '检查失败' });
+  }
+});
+
+// 获取关注列表
+app.get('/api/user/following', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const following = getAll(`
+      SELECT u.id, u.username, u.avatar
+      FROM follows f
+      JOIN users u ON f.following_id = u.id
+      WHERE f.follower_id = ?
+      ORDER BY f.created_at DESC
+    `, [userId]);
+
+    res.json({ following });
+  } catch (error) {
+    console.error('获取关注列表错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 获取粉丝列表
+app.get('/api/user/followers', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const followers = getAll(`
+      SELECT u.id, u.username, u.avatar
+      FROM follows f
+      JOIN users u ON f.follower_id = u.id
+      WHERE f.following_id = ?
+      ORDER BY f.created_at DESC
+    `, [userId]);
+
+    res.json({ followers });
+  } catch (error) {
+    console.error('获取粉丝列表错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 获取关注数和粉丝数
+app.get('/api/user/follow-stats/:userId', (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const followingCount = getOne('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?', [userId])?.count || 0;
+    const followersCount = getOne('SELECT COUNT(*) as count FROM follows WHERE following_id = ?', [userId])?.count || 0;
+
+    res.json({ followingCount, followersCount });
+  } catch (error) {
+    console.error('获取关注统计错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 获取关注的人的记忆（关注动态）
+app.get('/api/memories/following', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
+  try {
+    // 获取关注用户的记忆
+    const memories = getAll(`
+      SELECT m.*, u.username, u.avatar,
+        EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND memory_id = m.id) as is_liked,
+        EXISTS(SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = m.id) as is_bookmarked
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      JOIN follows f ON m.user_id = f.following_id
+      WHERE f.follower_id = ?
+      ORDER BY m.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, userId, userId, limit, offset]);
+
+    const totalResult = getOne(`
+      SELECT COUNT(*) as count 
+      FROM memories m
+      JOIN follows f ON m.user_id = f.following_id
+      WHERE f.follower_id = ?
+    `, [userId]);
+    const total = totalResult?.count || 0;
+
+    res.json({
+      memories,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取关注动态错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
 });

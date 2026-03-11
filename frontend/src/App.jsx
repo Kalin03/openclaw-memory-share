@@ -17,11 +17,11 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users } from 'lucide-react';
 
 const Home = () => {
-  const { loading: authLoading } = useAuth();
-  const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory, fetchHotMemories } = useMemories();
+  const { loading: authLoading, user } = useAuth();
+  const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory, fetchHotMemories, fetchFollowingMemories, isFollowingMode } = useMemories();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -80,8 +80,10 @@ const Home = () => {
     setActiveTab(tab);
     if (tab === 'latest') {
       fetchMemories(1);
-    } else {
+    } else if (tab === 'hot') {
       fetchHotMemories(1);
+    } else if (tab === 'following') {
+      fetchFollowingMemories(1);
     }
   };
 
@@ -90,8 +92,10 @@ const Home = () => {
       navigate(`/?search=${encodeURIComponent(searchQuery)}&page=${newPage}`);
     } else if (activeTab === 'latest') {
       fetchMemories(newPage);
-    } else {
+    } else if (activeTab === 'hot') {
       fetchHotMemories(newPage);
+    } else if (activeTab === 'following') {
+      fetchFollowingMemories(newPage);
     }
   };
 
@@ -160,6 +164,20 @@ const Home = () => {
                   <Flame size={18} />
                   热门
                 </button>
+                {user && (
+                  <button
+                    onClick={() => handleTabChange('following')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                      activeTab === 'following'
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50 border'
+                    }`}
+                    style={{ backgroundColor: activeTab === 'following' ? undefined : 'var(--bg-primary)', borderColor: 'var(--border-color)' }}
+                  >
+                    <Users size={18} />
+                    关注
+                  </button>
+                )}
               </div>
             )}
             
