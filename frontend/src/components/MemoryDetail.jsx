@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
@@ -191,6 +191,38 @@ const MemoryDetail = () => {
 
   const cancelReply = () => {
     setReplyTo(null);
+  };
+
+  const handleCommentLike = async (commentId, isLiked) => {
+    if (!user) {
+      toast.warning('请先登录');
+      return;
+    }
+    
+    try {
+      if (isLiked) {
+        // 取消点赞
+        await axios.delete(`${API_URL}/comments/${commentId}/like`);
+      } else {
+        // 点赞
+        await axios.post(`${API_URL}/comments/${commentId}/like`);
+      }
+      
+      // 更新评论列表
+      setComments(prev => prev.map(c => {
+        if (c.id === commentId) {
+          return {
+            ...c,
+            is_liked: !isLiked,
+            likes_count: isLiked ? c.likes_count - 1 : (c.likes_count || 0) + 1
+          };
+        }
+        return c;
+      }));
+    } catch (err) {
+      console.error('评论点赞失败:', err);
+      toast.error('操作失败');
+    }
   };
 
   const formatDate = (dateString) => {
@@ -444,15 +476,28 @@ const MemoryDetail = () => {
                         </span>
                       </div>
                       <p style={{ color: 'var(--text-secondary)' }}>{comment.content}</p>
-                      {user && (
+                      <div className="flex items-center gap-4 mt-2">
+                        {user && (
+                          <button
+                            onClick={() => handleReply(comment)}
+                            className="flex items-center gap-1 text-sm text-gray-400 hover:text-primary transition-colors"
+                          >
+                            <Reply size={14} />
+                            <span>回复</span>
+                          </button>
+                        )}
                         <button
-                          onClick={() => handleReply(comment)}
-                          className="flex items-center gap-1 mt-2 text-sm text-gray-400 hover:text-primary transition-colors"
+                          onClick={() => handleCommentLike(comment.id, comment.is_liked)}
+                          className={`flex items-center gap-1 text-sm transition-colors ${
+                            comment.is_liked 
+                              ? 'text-primary' 
+                              : 'text-gray-400 hover:text-primary'
+                          }`}
                         >
-                          <Reply size={14} />
-                          <span>回复</span>
+                          <ThumbsUp size={14} fill={comment.is_liked ? 'currentColor' : 'none'} />
+                          <span>{comment.likes_count || 0}</span>
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </div>

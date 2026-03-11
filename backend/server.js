@@ -172,6 +172,14 @@ db.exec(`
     status TEXT DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS comment_likes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    comment_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, comment_id)
+  );
 `);
 
 console.log('✅ Database initialized at:', DB_PATH);
@@ -523,15 +531,34 @@ app.post('/api/memories/:id/pin', authMiddleware, (req, res) => {
 // ==================== Comment Routes ====================
 
 // Get comments for a memory
-app.get('/api/memories/:id/comments', (req, res) => {
+app.get('/api/memories/:id/comments', optionalAuth, (req, res) => {
   try {
+    const userId = req.user?.id;
+    
+    // 获取评论列表，包含点赞数
     const comments = db.prepare(`
-      SELECT c.*, u.username, u.avatar
+      SELECT c.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM comment_likes WHERE comment_id = c.id) as likes_count
       FROM comments c
       JOIN users u ON c.user_id = u.id
       WHERE c.memory_id = ?
       ORDER BY c.created_at DESC
     `).all(req.params.id);
+
+    // 如果用户已登录，检查每条评论是否已被当前用户点赞
+    if (userId) {
+      const likedCommentIds = db.prepare(`
+        SELECT comment_id FROM comment_likes WHERE user_id = ?
+      `).all(userId).map(row => row.comment_id);
+      
+      comments.forEach(comment => {
+        comment.is_liked = likedCommentIds.includes(comment.id);
+      });
+    } else {
+      comments.forEach(comment => {
+        comment.is_liked = false;
+      });
+    }
 
     res.json(comments);
   } catch (error) {
@@ -589,6 +616,9 @@ app.delete('/api/comments/:id', authMiddleware, (req, res) => {
     }
 
     const memoryId = comment.memory_id;
+    // 先删除评论的点赞
+    db.prepare('DELETE FROM comment_likes WHERE comment_id = ?').run(commentId);
+    // 再删除评论
     db.prepare('DELETE FROM comments WHERE id = ?').run(commentId);
     db.prepare('UPDATE memories SET comments_count = (SELECT COUNT(*) FROM comments WHERE memory_id = ?) WHERE id = ?').run(memoryId, memoryId);
 
@@ -596,6 +626,69 @@ app.delete('/api/comments/:id', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('删除评论错误:', error);
     res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// Like a comment
+app.post('/api/comments/:id/like', authMiddleware, (req, res) => {
+  const commentId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // 检查评论是否存在
+    const comment = db.prepare('SELECT id FROM comments WHERE id = ?').get(commentId);
+    if (!comment) {
+      return res.status(404).json({ error: '评论不存在' });
+    }
+
+    // 检查是否已点赞
+    const existingLike = db.prepare('SELECT id FROM comment_likes WHERE user_id = ? AND comment_id = ?').get(userId, commentId);
+    if (existingLike) {
+      return res.status(400).json({ error: '已点赞过此评论' });
+    }
+
+    // 添加点赞
+    const likeId = uuidv4();
+    db.prepare('INSERT INTO comment_likes (id, user_id, comment_id) VALUES (?, ?, ?)').run(likeId, userId, commentId);
+
+    // 获取更新后的点赞数
+    const likesCount = db.prepare('SELECT COUNT(*) as count FROM comment_likes WHERE comment_id = ?').get(commentId).count;
+
+    res.json({ 
+      message: '点赞成功',
+      likes_count: likesCount,
+      is_liked: true
+    });
+  } catch (error) {
+    console.error('评论点赞错误:', error);
+    res.status(500).json({ error: '点赞失败' });
+  }
+});
+
+// Unlike a comment
+app.delete('/api/comments/:id/like', authMiddleware, (req, res) => {
+  const commentId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // 删除点赞
+    const result = db.prepare('DELETE FROM comment_likes WHERE user_id = ? AND comment_id = ?').run(userId, commentId);
+    
+    if (result.changes === 0) {
+      return res.status(400).json({ error: '未点赞此评论' });
+    }
+
+    // 获取更新后的点赞数
+    const likesCount = db.prepare('SELECT COUNT(*) as count FROM comment_likes WHERE comment_id = ?').get(commentId).count;
+
+    res.json({ 
+      message: '取消点赞成功',
+      likes_count: likesCount,
+      is_liked: false
+    });
+  } catch (error) {
+    console.error('取消评论点赞错误:', error);
+    res.status(500).json({ error: '取消点赞失败' });
   }
 });
 
