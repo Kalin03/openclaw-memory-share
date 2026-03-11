@@ -8,6 +8,7 @@ import EditMemoryModal from './components/EditMemoryModal';
 import UserProfile from './components/UserProfile';
 import RandomMemory from './components/RandomMemory';
 import TagCloud from './components/TagCloud';
+import BackToTop from './components/BackToTop';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
@@ -250,6 +251,9 @@ const AppContent = () => {
       {showCreateModal && <CreateMemoryModal onClose={() => setShowCreateModal(false)} />}
       {editingMemory && <EditMemoryModal memory={editingMemory} onClose={() => setEditingMemory(null)} />}
       {showProfileModal && <UserProfile onClose={() => setShowProfileModal(false)} />}
+      
+      {/* Back to Top Button */}
+      <BackToTop />
     </div>
   );
 };
