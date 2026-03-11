@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ChevronLeft, ChevronRight, Search, Clock, Flame } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2 } from 'lucide-react';
 
 const AppContent = () => {
   const { loading: authLoading } = useAuth();
