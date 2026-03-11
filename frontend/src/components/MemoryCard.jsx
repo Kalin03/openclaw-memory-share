@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2 } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
 
 const API_URL = '/api';
+const BASE_URL = window.location.origin;
 
 const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
   const { user } = useAuth();
@@ -19,6 +20,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
 
   const handleCopy = () => {
     // 使用传统方法确保兼容性
@@ -80,6 +82,50 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
       console.error('收藏失败:', err);
       toast.error('收藏失败');
     }
+  };
+
+  const handleShare = async () => {
+    const shareUrl = `${BASE_URL}/memory/${memory.id}`;
+    
+    // 尝试使用现代 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareCopied(true);
+        toast.success('分享链接已复制到剪贴板');
+        setTimeout(() => setShareCopied(false), 2000);
+        return;
+      } catch (err) {
+        console.error('Clipboard API 失败:', err);
+      }
+    }
+    
+    // 降级使用传统方法
+    const textArea = document.createElement('textarea');
+    textArea.value = shareUrl;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '0';
+    textArea.style.top = '0';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        setShareCopied(true);
+        toast.success('分享链接已复制到剪贴板');
+        setTimeout(() => setShareCopied(false), 2000);
+      } else {
+        toast.error('复制失败，请手动复制链接');
+      }
+    } catch (err) {
+      console.error('复制失败:', err);
+      toast.error('复制失败，请手动复制链接');
+    }
+    
+    document.body.removeChild(textArea);
   };
 
   const handleShowComments = async () => {
@@ -150,6 +196,19 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
             title="复制内容"
           >
             {copied ? <Check size={18} /> : <Copy size={18} />}
+          </button>
+          
+          <button
+            onClick={handleShare}
+            className={`p-2 rounded-lg transition-colors ${
+              shareCopied 
+                ? 'bg-green-100 text-green-500' 
+                : 'text-gray-500 hover:text-primary'
+            }`}
+            style={!shareCopied ? { backgroundColor: 'var(--bg-tertiary)' } : {}}
+            title="分享链接"
+          >
+            {shareCopied ? <Check size={18} /> : <Share2 size={18} />}
           </button>
           
           {user?.id === memory.user_id && (
