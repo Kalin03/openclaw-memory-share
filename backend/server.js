@@ -6,16 +6,51 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 
 const app = express();
 const PORT = 8282;
 const JWT_SECRET = process.env.JWT_SECRET || 'openclaw-memory-share-secret-2024';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'openclaw-admin-2024';
 const DB_PATH = path.join(__dirname, '../data/memory.db');
+const UPLOADS_DIR = path.join(__dirname, '../uploads');
+
+// Create uploads directory if not exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const filename = `${uuidv4()}${ext}`;
+    cb(null, filename);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('只支持 JPEG, PNG, GIF, WebP 格式的图片'));
+    }
+  }
+});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve uploaded images statically
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Initialize database with better-sqlite3 (真正的文件数据库，自动持久化)
 const dbDir = path.dirname(DB_PATH);
@@ -1263,6 +1298,48 @@ app.get('/api/memories/hot', (req, res) => {
   } catch (error) {
     console.error('获取热门记忆错误:', error);
     res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// ==================== Image Upload ====================
+
+// Upload image
+app.post('/api/upload/image', authMiddleware, upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '请选择要上传的图片' });
+    }
+
+    const imageUrl = `/uploads/${req.file.filename}`;
+    
+    res.json({
+      message: '上传成功',
+      url: imageUrl,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+  } catch (error) {
+    console.error('上传图片错误:', error);
+    res.status(500).json({ error: '上传失败' });
+  }
+});
+
+// Delete image (only by the uploader - tracked via filename stored in memory)
+app.delete('/api/upload/image/:filename', authMiddleware, (req, res) => {
+  const { filename } = req.params;
+  const filepath = path.join(UPLOADS_DIR, filename);
+
+  try {
+    if (fs.existsSync(filepath)) {
+      fs.unlinkSync(filepath);
+      res.json({ message: '删除成功' });
+    } else {
+      res.status(404).json({ error: '图片不存在' });
+    }
+  } catch (error) {
+    console.error('删除图片错误:', error);
+    res.status(500).json({ error: '删除失败' });
   }
 });
 
