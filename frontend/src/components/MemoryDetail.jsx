@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import MentionInput from './MentionInput';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -235,6 +236,44 @@ const MemoryDetail = () => {
     });
   };
 
+  // 渲染评论内容，处理@提及
+  const renderCommentContent = (content) => {
+    if (!content) return null;
+    
+    // 匹配 @用户名 的正则
+    const mentionRegex = /@(\w+)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = mentionRegex.exec(content)) !== null) {
+      // 添加@之前的内容
+      if (match.index > lastIndex) {
+        parts.push(content.substring(lastIndex, match.index));
+      }
+      
+      // 添加@用户名链接
+      parts.push(
+        <button
+          key={match.index}
+          onClick={() => navigate(`/user/${match[1]}`)}
+          className="text-primary hover:underline font-medium"
+        >
+          @{match[1]}
+        </button>
+      );
+      
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // 添加最后一部分内容
+    if (lastIndex < content.length) {
+      parts.push(content.substring(lastIndex));
+    }
+    
+    return parts;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
@@ -427,11 +466,12 @@ const MemoryDetail = () => {
                       </button>
                     </div>
                   )}
-                  <textarea
+                  <MentionInput
                     className="input-flat w-full min-h-[80px] resize-none"
-                    placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论..."}
+                    placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论... 支持 @用户名 提及他人"}
                     value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
+                    onChange={setNewComment}
+                    minRows={3}
                   />
                   <div className="flex justify-end mt-2">
                     <button
@@ -475,7 +515,7 @@ const MemoryDetail = () => {
                           {formatDate(comment.created_at)}
                         </span>
                       </div>
-                      <p style={{ color: 'var(--text-secondary)' }}>{comment.content}</p>
+                      <p style={{ color: 'var(--text-secondary)' }}>{renderCommentContent(comment.content)}</p>
                       <div className="flex items-center gap-4 mt-2">
                         {user && (
                           <button

@@ -586,6 +586,71 @@ app.post('/api/memories/:id/comments', authMiddleware, (req, res) => {
 
     db.prepare('UPDATE memories SET comments_count = (SELECT COUNT(*) FROM comments WHERE memory_id = ?) WHERE id = ?').run(memoryId, memoryId);
 
+    // 处理@提及 - 检测@用户名并发送通知
+    const mentionRegex = /@(\w+)/g;
+    const mentions = [];
+    let match;
+    while ((match = mentionRegex.exec(content)) !== null) {
+      mentions.push(match[1]);
+    }
+
+    // 获取记忆信息和评论者信息
+    const memory = db.prepare('SELECT m.*, u.username as author_name FROM memories m JOIN users u ON m.user_id = u.id WHERE m.id = ?').get(memoryId);
+    const commenter = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+
+    // 为每个被@的用户发送通知
+    const mentionedUserIds = new Set();
+    for (const username of mentions) {
+      const mentionedUser = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+      if (mentionedUser && mentionedUser.id !== userId && !mentionedUserIds.has(mentionedUser.id)) {
+        mentionedUserIds.add(mentionedUser.id);
+        const notificationId = uuidv4();
+        db.prepare(`
+          INSERT INTO notifications (id, user_id, type, title, content, data)
+          VALUES (?, ?, 'mention', ?, ?, ?)
+        `).run(
+          notificationId,
+          mentionedUser.id,
+          `${commenter.username} 在评论中提到了你`,
+          content.substring(0, 100),
+          JSON.stringify({ memoryId, commentId, memoryTitle: memory?.title })
+        );
+      }
+    }
+
+    // 如果是回复别人的评论，给被回复者发送通知
+    if (replyToId) {
+      const replyToComment = db.prepare('SELECT c.user_id, u.username FROM comments c JOIN users u ON c.user_id = u.id WHERE c.id = ?').get(replyToId);
+      if (replyToComment && replyToComment.user_id !== userId) {
+        const notificationId = uuidv4();
+        db.prepare(`
+          INSERT INTO notifications (id, user_id, type, title, content, data)
+          VALUES (?, ?, 'reply', ?, ?, ?)
+        `).run(
+          notificationId,
+          replyToComment.user_id,
+          `${commenter.username} 回复了你的评论`,
+          content.substring(0, 100),
+          JSON.stringify({ memoryId, commentId, memoryTitle: memory?.title })
+        );
+      }
+    }
+
+    // 给记忆作者发送评论通知（如果不是自己评论自己的记忆）
+    if (memory && memory.user_id !== userId) {
+      const notificationId = uuidv4();
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, type, title, content, data)
+        VALUES (?, ?, 'comment', ?, ?, ?)
+      `).run(
+        notificationId,
+        memory.user_id,
+        `${commenter.username} 评论了你的记忆`,
+        content.substring(0, 100),
+        JSON.stringify({ memoryId, commentId, memoryTitle: memory.title })
+      );
+    }
+
     const comment = db.prepare(`
       SELECT c.*, u.username, u.avatar
       FROM comments c
@@ -593,7 +658,7 @@ app.post('/api/memories/:id/comments', authMiddleware, (req, res) => {
       WHERE c.id = ?
     `).get(commentId);
 
-    res.status(201).json(comment);
+    res.status(201).json({ comment, mentions: Array.from(mentionedUserIds) });
   } catch (error) {
     console.error('创建评论错误:', error);
     res.status(500).json({ error: '评论失败' });
@@ -1266,6 +1331,31 @@ app.post('/api/reports', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('举报错误:', error);
     res.status(500).json({ error: '举报失败' });
+  }
+});
+
+// ==================== User Search Routes ====================
+
+// Search users for @mentions
+app.get('/api/users/search', (req, res) => {
+  const { q } = req.query;
+  
+  if (!q || q.length < 1) {
+    return res.json([]);
+  }
+
+  try {
+    const users = db.prepare(`
+      SELECT id, username, avatar
+      FROM users
+      WHERE username LIKE ?
+      LIMIT 10
+    `).all(`%${q}%`);
+
+    res.json(users);
+  } catch (error) {
+    console.error('搜索用户错误:', error);
+    res.status(500).json({ error: '搜索失败' });
   }
 });
 
