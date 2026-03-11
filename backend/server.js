@@ -112,6 +112,18 @@ async function initDB() {
     console.log('reply_to_id column check/creation skipped:', e.message);
   }
 
+  // 添加 is_pinned 字段（如果不存在）
+  try {
+    const columns = db.exec("PRAGMA table_info(memories)");
+    const hasIsPinned = columns[0]?.values?.some(col => col[1] === 'is_pinned');
+    if (!hasIsPinned) {
+      db.run('ALTER TABLE memories ADD COLUMN is_pinned INTEGER DEFAULT 0');
+      console.log('Added is_pinned column to memories table');
+    }
+  } catch (e) {
+    console.log('is_pinned column check/creation skipped:', e.message);
+  }
+
   // 创建签到表
   db.run(`
     CREATE TABLE IF NOT EXISTS sign_ins (
@@ -932,12 +944,13 @@ app.get('/api/user/memories', authMiddleware, (req, res) => {
   const userId = req.user.id;
 
   try {
+    // 置顶的记忆排在前面
     const memories = getAll(`
       SELECT m.*, u.username, u.avatar
       FROM memories m
       JOIN users u ON m.user_id = u.id
       WHERE m.user_id = ?
-      ORDER BY m.created_at DESC
+      ORDER BY m.is_pinned DESC, m.created_at DESC
     `, [userId]);
 
     res.json(memories);
@@ -1379,7 +1392,7 @@ app.get('/api/user/followers', authMiddleware, (req, res) => {
   }
 });
 
-// 获取关注数和粉丝数
+// 获取用户关注统计
 app.get('/api/user/follow-stats/:userId', (req, res) => {
   const userId = req.params.userId;
 
@@ -1391,6 +1404,36 @@ app.get('/api/user/follow-stats/:userId', (req, res) => {
   } catch (error) {
     console.error('获取关注统计错误:', error);
     res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// ============ Pin Routes ============
+
+// 置顶/取消置顶记忆
+app.post('/api/memories/:id/pin', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const memory = getOne('SELECT * FROM memories WHERE id = ?', [id]);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权操作此记忆' });
+    }
+
+    const newPinnedState = memory.is_pinned ? 0 : 1;
+    runQuery('UPDATE memories SET is_pinned = ? WHERE id = ?', [newPinnedState, id]);
+
+    res.json({ 
+      pinned: newPinnedState === 1, 
+      message: newPinnedState === 1 ? '已置顶' : '已取消置顶' 
+    });
+  } catch (error) {
+    console.error('置顶操作错误:', error);
+    res.status(500).json({ error: '操作失败' });
   }
 });
 

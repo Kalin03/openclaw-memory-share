@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users, Pin } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
@@ -75,6 +75,25 @@ const UserProfile = ({ onClose }) => {
     } catch (err) {
       console.error('删除失败:', err);
       toast.error('删除失败');
+    }
+  };
+
+  const handlePinMemory = async (id) => {
+    try {
+      const res = await axios.post(`${API_URL}/memories/${id}/pin`);
+      // 更新本地状态
+      setMemories(memories.map(m => 
+        m.id === id ? { ...m, is_pinned: res.data.pinned ? 1 : 0 } : m
+      ));
+      // 重新排序（置顶的排前面）
+      setMemories(prev => [...prev].sort((a, b) => {
+        if (a.is_pinned !== b.is_pinned) return (b.is_pinned || 0) - (a.is_pinned || 0);
+        return new Date(b.created_at) - new Date(a.created_at);
+      }));
+      toast.success(res.data.message);
+    } catch (err) {
+      console.error('置顶操作失败:', err);
+      toast.error(err.response?.data?.error || '操作失败');
     }
   };
 
@@ -485,7 +504,7 @@ const UserProfile = ({ onClose }) => {
             ) : (
               <div className="space-y-4">
                 {memories.map(memory => (
-                  <div key={memory.id} className="border border-gray-100 rounded-xl p-4 hover:shadow-sm transition-shadow">
+                  <div key={memory.id} className={`border rounded-xl p-4 hover:shadow-sm transition-shadow ${memory.is_pinned ? 'border-primary/30 bg-primary/5' : 'border-gray-100'}`}>
                     {editingMemory?.id === memory.id ? (
                       <div className="space-y-3">
                         <input
@@ -521,13 +540,31 @@ const UserProfile = ({ onClose }) => {
                       <>
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h3 className="font-bold text-dark mb-1">{memory.title}</h3>
+                            <div className="flex items-center gap-2 mb-1">
+                              {memory.is_pinned && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/20 text-primary text-xs font-medium rounded-full">
+                                  <Pin size={12} /> 置顶
+                                </span>
+                              )}
+                              <h3 className="font-bold text-dark">{memory.title}</h3>
+                            </div>
                             <p className="text-sm text-gray-500 mb-2">{formatDate(memory.created_at)}</p>
                             <div className="prose prose-sm max-w-none text-gray-600 text-sm line-clamp-3">
                               <ReactMarkdown>{memory.content}</ReactMarkdown>
                             </div>
                           </div>
                           <div className="flex gap-2 ml-4">
+                            <button
+                              onClick={() => handlePinMemory(memory.id)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                memory.is_pinned 
+                                  ? 'bg-primary/20 text-primary' 
+                                  : 'text-gray-500 hover:text-primary hover:bg-gray-100'
+                              }`}
+                              title={memory.is_pinned ? '取消置顶' : '置顶'}
+                            >
+                              <Pin size={16} />
+                            </button>
                             <button
                               onClick={() => handleEditMemory(memory)}
                               className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-primary transition-colors"
