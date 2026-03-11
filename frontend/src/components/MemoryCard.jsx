@@ -133,8 +133,8 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
         <div className="flex items-center gap-3">
           <span className="text-2xl">{memory.avatar || '🦞'}</span>
           <div>
-            <span className="font-medium text-dark">{memory.username}</span>
-            <p className="text-sm text-gray-400">{formatDate(memory.created_at)}</p>
+            <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{memory.username}</span>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{formatDate(memory.created_at)}</p>
           </div>
         </div>
         
@@ -144,8 +144,9 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
             className={`p-2 rounded-lg transition-colors ${
               copied 
                 ? 'bg-green-100 text-green-500' 
-                : 'hover:bg-gray-100 text-gray-500 hover:text-primary'
+                : 'text-gray-500 hover:text-primary'
             }`}
+            style={!copied ? { backgroundColor: 'var(--bg-tertiary)' } : {}}
             title="复制内容"
           >
             {copied ? <Check size={18} /> : <Copy size={18} />}
@@ -155,14 +156,16 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
             <>
               <button
                 onClick={() => onEdit && onEdit(memory)}
-                className="p-2 rounded-lg hover:bg-blue-50 text-gray-500 hover:text-blue-500 transition-colors"
+                className="p-2 rounded-lg text-gray-500 hover:text-blue-500 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
                 title="编辑"
               >
                 <Edit2 size={18} />
               </button>
               <button
                 onClick={() => onDelete(memory.id)}
-                className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
+                className="p-2 rounded-lg text-gray-500 hover:text-red-500 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
                 title="删除"
               >
                 <Trash2 size={18} />
@@ -173,10 +176,10 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
       </div>
 
       {/* Title */}
-      <h3 className="text-xl font-bold text-dark mb-3">{memory.title}</h3>
+      <h3 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>{memory.title}</h3>
 
       {/* Content */}
-      <div className="prose prose-sm max-w-none mb-4 text-gray-600">
+      <div className="prose prose-sm max-w-none mb-4" style={{ color: 'var(--text-secondary)' }}>
         <ReactMarkdown>{memory.content}</ReactMarkdown>
       </div>
 
@@ -196,7 +199,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
       )}
 
       {/* Actions */}
-      <div className="flex items-center gap-6 pt-4 border-t border-gray-100">
+      <div className="flex items-center gap-6 pt-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
         <button
           onClick={handleLike}
           className={`flex items-center gap-1.5 transition-colors ${
@@ -228,7 +231,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
 
       {/* Comments */}
       {showComments && (
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+        <div className="mt-4 pt-4 border-t space-y-4" style={{ borderColor: 'var(--border-color)' }}>
           {user && (
             <form onSubmit={handleAddComment} className="flex gap-2">
               <input
@@ -249,20 +252,20 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
               {comments.map(comment => (
                 <div key={comment.id} className="flex gap-3 items-start">
                   <span className="text-lg">{comment.avatar || '🦞'}</span>
-                  <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                  <div className="flex-1 rounded-lg p-3" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm">{comment.username}</span>
-                      <span className="text-xs text-gray-400">
+                      <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{comment.username}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
                         {formatDate(comment.created_at)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600">{comment.content}</p>
+                    <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{comment.content}</p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-4">暂无评论</p>
+            <p className="text-sm text-center py-4" style={{ color: 'var(--text-secondary)' }}>暂无评论</p>
           )}
         </div>
       )}

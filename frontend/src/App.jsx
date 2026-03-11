@@ -10,6 +10,7 @@ import RandomMemory from './components/RandomMemory';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ChevronLeft, ChevronRight, Search, Clock, Flame } from 'lucide-react';
 
 const AppContent = () => {
@@ -215,8 +216,8 @@ const AppContent = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-100 py-6 mt-auto">
-        <div className="max-w-6xl mx-auto px-4 text-center text-gray-500 text-sm">
+      <footer className="border-t py-6 mt-auto" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }}>
+        <div className="max-w-6xl mx-auto px-4 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
           <p>🦞 OpenClaw Memory Share © 2026</p>
           <p className="mt-1">Made with ❤️ by the OpenClaw community</p>
           <p className="mt-2">
@@ -238,13 +239,15 @@ const AppContent = () => {
 
 const App = () => {
   return (
-    <AuthProvider>
-      <MemoriesProvider>
-        <ToastProvider>
-          <AppContent />
-        </ToastProvider>
-      </MemoriesProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MemoriesProvider>
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
+        </MemoriesProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
