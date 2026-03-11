@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2 } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
@@ -345,6 +345,11 @@ const MemoryDetail = () => {
             <div className="flex items-center gap-2 text-gray-500">
               <MessageCircle size={24} />
               <span className="font-medium">{comments.length}</span>
+            </div>
+
+            <div className="flex items-center gap-2 text-gray-500">
+              <Eye size={24} />
+              <span className="font-medium">{memory.views_count || 0}</span>
             </div>
           </div>
         </article>

@@ -87,6 +87,18 @@ async function initDB() {
     )
   `);
 
+  // 添加 views_count 字段（如果不存在）
+  try {
+    const columns = db.exec("PRAGMA table_info(memories)");
+    const hasViewsCount = columns[0]?.values?.some(col => col[1] === 'views_count');
+    if (!hasViewsCount) {
+      db.run('ALTER TABLE memories ADD COLUMN views_count INTEGER DEFAULT 0');
+      console.log('Added views_count column to memories table');
+    }
+  } catch (e) {
+    console.log('views_count column check/creation skipped:', e.message);
+  }
+
   saveDB();
 }
 
@@ -519,6 +531,10 @@ app.get('/api/memories/:id', (req, res) => {
     if (!memory) {
       return res.status(404).json({ error: '记忆不存在' });
     }
+
+    // 增加阅读量
+    runQuery('UPDATE memories SET views_count = COALESCE(views_count, 0) + 1 WHERE id = ?', [id]);
+    memory.views_count = (memory.views_count || 0) + 1;
 
     // Get comments
     const comments = getAll(`

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import axios from 'axios';
@@ -296,6 +296,11 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick }) => {
           <MessageCircle size={20} />
           <span className="text-sm font-medium">{memory.comments_count || 0}</span>
         </button>
+
+        <div className="flex items-center gap-1.5 text-gray-500">
+          <Eye size={20} />
+          <span className="text-sm font-medium">{memory.views_count || 0}</span>
+        </div>
       </div>
 
       {/* Comments */}
