@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import MentionInput from './MentionInput';
+import VersionHistoryModal from './VersionHistoryModal';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -28,6 +29,7 @@ const MemoryDetail = () => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(null); // { id, username }
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   useEffect(() => {
     fetchMemory();
@@ -362,6 +364,14 @@ const MemoryDetail = () => {
               {user?.id === memory.user_id && (
                 <>
                   <button
+                    onClick={() => setShowVersionHistory(true)}
+                    className="p-2 rounded-lg text-gray-500 hover:text-purple-500 transition-colors"
+                    style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                    title="版本历史"
+                  >
+                    <History size={18} />
+                  </button>
+                  <button
                     onClick={() => navigate(`/?edit=${memory.id}`)}
                     className="p-2 rounded-lg text-gray-500 hover:text-blue-500 transition-colors"
                     style={{ backgroundColor: 'var(--bg-tertiary)' }}
@@ -551,6 +561,15 @@ const MemoryDetail = () => {
           )}
         </section>
       </main>
+
+      {/* Version History Modal */}
+      <VersionHistoryModal
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        memoryId={id}
+        isOwner={user?.id === memory?.user_id}
+        onRestored={fetchMemory}
+      />
     </div>
   );
 };

@@ -180,6 +180,21 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, comment_id)
   );
+
+  CREATE TABLE IF NOT EXISTS memory_versions (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tags TEXT DEFAULT '',
+    visibility TEXT DEFAULT 'public',
+    version_number INTEGER NOT NULL,
+    change_summary TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 // 添加 deleted_at 字段（回收站功能）
@@ -408,7 +423,7 @@ app.post('/api/memories', authMiddleware, (req, res) => {
 
 // Update memory
 app.put('/api/memories/:id', authMiddleware, (req, res) => {
-  const { title, content, tags, visibility } = req.body;
+  const { title, content, tags, visibility, changeSummary } = req.body;
   const memoryId = req.params.id;
   const userId = req.user.id;
 
@@ -422,10 +437,28 @@ app.put('/api/memories/:id', authMiddleware, (req, res) => {
       return res.status(403).json({ error: '无权修改此记忆' });
     }
 
-    db.prepare(`
-      UPDATE memories SET title = ?, content = ?, tags = ?, visibility = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(title || memory.title, content || memory.content, tags || memory.tags, visibility || memory.visibility, memoryId);
+    // 检查是否有实质性修改
+    const hasChanges = (title && title !== memory.title) ||
+                       (content && content !== memory.content) ||
+                       (tags !== undefined && tags !== memory.tags) ||
+                       (visibility && visibility !== memory.visibility);
+
+    if (hasChanges) {
+      // 保存当前版本到版本历史
+      const versionCount = db.prepare('SELECT COUNT(*) as count FROM memory_versions WHERE memory_id = ?').get(memoryId);
+      const versionNumber = (versionCount?.count || 0) + 1;
+
+      db.prepare(`
+        INSERT INTO memory_versions (id, memory_id, user_id, title, content, tags, visibility, version_number, change_summary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(uuidv4(), memoryId, userId, memory.title, memory.content, memory.tags, memory.visibility, versionNumber, changeSummary || null);
+
+      // 更新记忆
+      db.prepare(`
+        UPDATE memories SET title = ?, content = ?, tags = ?, visibility = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(title || memory.title, content || memory.content, tags || memory.tags, visibility || memory.visibility, memoryId);
+    }
 
     const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
     res.json(updated);
@@ -1528,6 +1561,115 @@ app.delete('/api/upload/image/:filename', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('删除图片错误:', error);
     res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// ==================== Version History Routes ====================
+
+// Get version history for a memory
+app.get('/api/memories/:id/versions', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    // 检查记忆是否存在且属于当前用户
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权查看此记忆的版本历史' });
+    }
+
+    const versions = db.prepare(`
+      SELECT v.*, u.username, u.avatar
+      FROM memory_versions v
+      JOIN users u ON v.user_id = u.id
+      WHERE v.memory_id = ?
+      ORDER BY v.version_number DESC
+    `).all(memoryId);
+
+    res.json(versions);
+  } catch (error) {
+    console.error('获取版本历史错误:', error);
+    res.status(500).json({ error: '获取版本历史失败' });
+  }
+});
+
+// Get specific version
+app.get('/api/memories/:id/versions/:versionId', authMiddleware, (req, res) => {
+  const { id: memoryId, versionId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权查看此记忆的版本历史' });
+    }
+
+    const version = db.prepare(`
+      SELECT v.*, u.username, u.avatar
+      FROM memory_versions v
+      JOIN users u ON v.user_id = u.id
+      WHERE v.id = ? AND v.memory_id = ?
+    `).get(versionId, memoryId);
+
+    if (!version) {
+      return res.status(404).json({ error: '版本不存在' });
+    }
+
+    res.json(version);
+  } catch (error) {
+    console.error('获取版本详情错误:', error);
+    res.status(500).json({ error: '获取版本详情失败' });
+  }
+});
+
+// Restore to specific version
+app.post('/api/memories/:id/versions/:versionId/restore', authMiddleware, (req, res) => {
+  const { id: memoryId, versionId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权恢复此记忆的版本' });
+    }
+
+    const version = db.prepare('SELECT * FROM memory_versions WHERE id = ? AND memory_id = ?').get(versionId, memoryId);
+    if (!version) {
+      return res.status(404).json({ error: '版本不存在' });
+    }
+
+    // 先保存当前版本
+    const versionCount = db.prepare('SELECT COUNT(*) as count FROM memory_versions WHERE memory_id = ?').get(memoryId);
+    const newVersionNumber = (versionCount?.count || 0) + 1;
+
+    db.prepare(`
+      INSERT INTO memory_versions (id, memory_id, user_id, title, content, tags, visibility, version_number, change_summary)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), memoryId, userId, memory.title, memory.content, memory.tags, memory.visibility, newVersionNumber, '恢复前自动保存');
+
+    // 恢复到历史版本
+    db.prepare(`
+      UPDATE memories SET title = ?, content = ?, tags = ?, visibility = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(version.title, version.content, version.tags, version.visibility, memoryId);
+
+    const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    res.json({ message: '恢复成功', memory: updated });
+  } catch (error) {
+    console.error('恢复版本错误:', error);
+    res.status(500).json({ error: '恢复版本失败' });
   }
 });
 
