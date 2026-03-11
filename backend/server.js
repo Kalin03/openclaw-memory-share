@@ -122,6 +122,20 @@ async function initDB() {
     )
   `);
 
+  // 创建通知表
+  db.run(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT,
+      data TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   saveDB();
 }
 
@@ -725,6 +739,20 @@ app.post('/api/memories/:id/like', authMiddleware, (req, res) => {
       // Like
       runQuery('INSERT INTO likes (id, user_id, memory_id) VALUES (?, ?, ?)', [uuidv4(), userId, id]);
       runQuery('UPDATE memories SET likes_count = likes_count + 1 WHERE id = ?', [id]);
+      
+      // 创建通知
+      const memory = getOne('SELECT m.title, m.user_id, u.username FROM memories m JOIN users u ON m.user_id = u.id WHERE m.id = ?', [id]);
+      const liker = getOne('SELECT username FROM users WHERE id = ?', [userId]);
+      if (memory && memory.user_id !== userId) {
+        createNotification(
+          memory.user_id,
+          'like',
+          '收到新的点赞',
+          `${liker?.username || '有人'} 赞了你的记忆《${memory.title}》`,
+          { memoryId: id, type: 'like' }
+        );
+      }
+      
       res.json({ liked: true, message: '点赞成功' });
     }
   } catch (error) {
@@ -752,6 +780,20 @@ app.post('/api/memories/:id/bookmark', authMiddleware, (req, res) => {
       // Add bookmark
       runQuery('INSERT INTO bookmarks (id, user_id, memory_id) VALUES (?, ?, ?)', [uuidv4(), userId, id]);
       runQuery('UPDATE memories SET bookmarks_count = bookmarks_count + 1 WHERE id = ?', [id]);
+      
+      // 创建通知
+      const memory = getOne('SELECT m.title, m.user_id, u.username FROM memories m JOIN users u ON m.user_id = u.id WHERE m.id = ?', [id]);
+      const bookmarker = getOne('SELECT username FROM users WHERE id = ?', [userId]);
+      if (memory && memory.user_id !== userId) {
+        createNotification(
+          memory.user_id,
+          'bookmark',
+          '收到新的收藏',
+          `${bookmarker?.username || '有人'} 收藏了你的记忆《${memory.title}》`,
+          { memoryId: id, type: 'bookmark' }
+        );
+      }
+      
       res.json({ bookmarked: true, message: '收藏成功' });
     }
   } catch (error) {
@@ -796,6 +838,19 @@ app.post('/api/memories/:id/comments', authMiddleware, (req, res) => {
     const commentId = uuidv4();
     runQuery('INSERT INTO comments (id, user_id, memory_id, content) VALUES (?, ?, ?, ?)', [commentId, req.user.id, id, content]);
     runQuery('UPDATE memories SET comments_count = comments_count + 1 WHERE id = ?', [id]);
+
+    // 创建评论通知
+    const memory = getOne('SELECT m.title, m.user_id FROM memories m WHERE m.id = ?', [id]);
+    const commenter = getOne('SELECT username FROM users WHERE id = ?', [req.user.id]);
+    if (memory && memory.user_id !== req.user.id) {
+      createNotification(
+        memory.user_id,
+        'comment',
+        '收到新的评论',
+        `${commenter?.username || '有人'} 评论了你的记忆《${memory.title}》`,
+        { memoryId: id, commentId, type: 'comment' }
+      );
+    }
 
     const comment = getOne(`
       SELECT c.*, u.username, u.avatar
@@ -1216,6 +1271,17 @@ app.post('/api/user/follow/:targetId', authMiddleware, (req, res) => {
       // 关注
       const followId = uuidv4();
       runQuery('INSERT INTO follows (id, follower_id, following_id) VALUES (?, ?, ?)', [followId, userId, targetId]);
+      
+      // 创建关注通知
+      const follower = getOne('SELECT username FROM users WHERE id = ?', [userId]);
+      createNotification(
+        targetId,
+        'follow',
+        '有新粉丝关注了你',
+        `${follower?.username || '有人'} 关注了你`,
+        { followerId: userId, type: 'follow' }
+      );
+      
       res.json({ following: true, message: '关注成功' });
     }
   } catch (error) {
@@ -1290,5 +1356,123 @@ app.get('/api/user/follow-stats/:userId', (req, res) => {
   } catch (error) {
     console.error('获取关注统计错误:', error);
     res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// ============ Notification Routes ============
+
+// 创建通知（内部函数）
+function createNotification(userId, type, title, content, data = null) {
+  try {
+    const notificationId = uuidv4();
+    runQuery(
+      'INSERT INTO notifications (id, user_id, type, title, content, data) VALUES (?, ?, ?, ?, ?, ?)',
+      [notificationId, userId, type, title, content, data ? JSON.stringify(data) : null]
+    );
+    return notificationId;
+  } catch (error) {
+    console.error('创建通知失败:', error);
+    return null;
+  }
+}
+
+// 获取通知列表
+app.get('/api/notifications', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const offset = (page - 1) * limit;
+
+  try {
+    const notifications = getAll(`
+      SELECT * FROM notifications
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `, [userId, limit, offset]);
+
+    const totalResult = getOne('SELECT COUNT(*) as count FROM notifications WHERE user_id = ?', [userId]);
+    const unreadResult = getOne('SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0', [userId]);
+
+    res.json({
+      notifications: notifications.map(n => ({
+        ...n,
+        data: n.data ? JSON.parse(n.data) : null
+      })),
+      pagination: {
+        page,
+        limit,
+        total: totalResult?.count || 0,
+        totalPages: Math.ceil((totalResult?.count || 0) / limit)
+      },
+      unreadCount: unreadResult?.count || 0
+    });
+  } catch (error) {
+    console.error('获取通知列表错误:', error);
+    res.status(500).json({ error: '获取通知失败' });
+  }
+});
+
+// 获取未读通知数量
+app.get('/api/notifications/unread-count', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const result = getOne('SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0', [userId]);
+    res.json({ unreadCount: result?.count || 0 });
+  } catch (error) {
+    console.error('获取未读数量错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 标记通知为已读
+app.put('/api/notifications/:id/read', authMiddleware, (req, res) => {
+  const notificationId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const notification = getOne('SELECT * FROM notifications WHERE id = ? AND user_id = ?', [notificationId, userId]);
+    if (!notification) {
+      return res.status(404).json({ error: '通知不存在' });
+    }
+
+    runQuery('UPDATE notifications SET is_read = 1 WHERE id = ?', [notificationId]);
+    res.json({ message: '已标记为已读' });
+  } catch (error) {
+    console.error('标记已读错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// 标记所有通知为已读
+app.put('/api/notifications/read-all', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    runQuery('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0', [userId]);
+    res.json({ message: '已全部标记为已读' });
+  } catch (error) {
+    console.error('标记全部已读错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// 删除通知
+app.delete('/api/notifications/:id', authMiddleware, (req, res) => {
+  const notificationId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const notification = getOne('SELECT * FROM notifications WHERE id = ? AND user_id = ?', [notificationId, userId]);
+    if (!notification) {
+      return res.status(404).json({ error: '通知不存在' });
+    }
+
+    runQuery('DELETE FROM notifications WHERE id = ?', [notificationId]);
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除通知错误:', error);
+    res.status(500).json({ error: '删除失败' });
   }
 });

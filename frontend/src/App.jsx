@@ -198,8 +198,8 @@ const Home = () => {
             )}
 
             {loading ? (
-              <div className="grid gap-6 md:grid-cols-2">
-                {[...Array(4)].map((_, i) => (
+              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                {[...Array(6)].map((_, i) => (
                   <MemoryCardSkeleton key={i} />
                 ))}
               </div>
@@ -226,15 +226,27 @@ const Home = () => {
               </div>
             ) : (
               <>
-                <div className="grid gap-6 md:grid-cols-2">
+                {/* 瀑布流布局 */}
+                <div 
+                  className="masonry-grid"
+                  style={{
+                    columnCount: 'auto',
+                    columnWidth: '320px',
+                    columnGap: '24px',
+                  }}
+                >
                   {memories.map(memory => (
-                    <MemoryCard 
+                    <div 
                       key={memory.id} 
-                      memory={memory}
-                      onDelete={handleDelete}
-                      onEdit={handleEdit}
-                      onTagClick={handleTagClick}
-                    />
+                      style={{ breakInside: 'avoid', marginBottom: '24px' }}
+                    >
+                      <MemoryCard 
+                        memory={memory}
+                        onDelete={handleDelete}
+                        onEdit={handleEdit}
+                        onTagClick={handleTagClick}
+                      />
+                    </div>
                   ))}
                 </div>
 

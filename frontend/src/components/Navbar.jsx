@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { LogOut, User, Plus, Search, X, Sun, Moon } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 
 const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
   const { user, logout } = useAuth();
@@ -76,6 +77,9 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
                 <Moon size={20} style={{ color: 'var(--text-secondary)' }} />
               )}
             </button>
+
+            {/* Notification Bell */}
+            <NotificationBell user={user} />
 
             {user ? (
               <>
