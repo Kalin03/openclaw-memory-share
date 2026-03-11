@@ -1,0 +1,21 @@
+{
+  "name": "龙虾记忆分享 - OpenClaw Memory Share",
+  "short_name": "龙虾记忆",
+  "description": "OpenClaw 社区的记忆分享平台，记录、分享、发现 AI 使用心得",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/lobster.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "social"],
+  "lang": "zh-CN",
+  "prefer_related_applications": false
+}
