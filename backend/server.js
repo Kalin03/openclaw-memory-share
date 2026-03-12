@@ -229,7 +229,24 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, tag)
   );
+
+  CREATE TABLE IF NOT EXISTS memory_references (
+    id TEXT PRIMARY KEY,
+    source_memory_id TEXT NOT NULL,
+    target_memory_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_memory_id, target_memory_id)
+  );
 `);
+
+// Create indexes for memory_references
+try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_source_memory ON memory_references(source_memory_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_target_memory ON memory_references(target_memory_id)`);
+  console.log('✅ Created indexes for memory_references table');
+} catch (e) {
+  // Indexes already exist
+}
 
 // 添加 deleted_at 字段（回收站功能）
 try {
@@ -240,6 +257,39 @@ try {
 }
 
 console.log('✅ Database initialized at:', DB_PATH);
+
+// 解析记忆内容中的引用 [[memoryId]] 格式
+function extractReferences(content) {
+  const referenceRegex = /\[\[([a-f0-9-]{36})\]\]/g;
+  const references = [];
+  let match;
+  while ((match = referenceRegex.exec(content)) !== null) {
+    references.push(match[1]);
+  }
+  return [...new Set(references)]; // 去重
+}
+
+// 更新记忆引用关系
+function updateMemoryReferences(sourceId, content) {
+  const references = extractReferences(content);
+
+  // 删除旧的引用
+  db.prepare('DELETE FROM memory_references WHERE source_memory_id = ?').run(sourceId);
+
+  // 添加新的引用
+  const insertRef = db.prepare(`
+    INSERT OR IGNORE INTO memory_references (id, source_memory_id, target_memory_id)
+    VALUES (?, ?, ?)
+  `);
+
+  for (const targetId of references) {
+    // 检查目标记忆是否存在
+    const targetExists = db.prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL').get(targetId);
+    if (targetExists) {
+      insertRef.run(uuidv4(), sourceId, targetId);
+    }
+  }
+}
 
 // Auth middleware
 const authMiddleware = (req, res, next) => {
@@ -417,6 +467,34 @@ app.get('/api/memories', optionalAuth, (req, res) => {
   }
 });
 
+// 搜索记忆（用于引用搜索）- 必须在 /api/memories/:id 之前
+app.get('/api/memories/search-for-reference', optionalAuth, (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 1) {
+      return res.json([]);
+    }
+
+    const searchTerm = `%${q.trim()}%`;
+    const memories = db.prepare(`
+      SELECT m.id, m.title, m.tags, m.created_at,
+             u.username, u.avatar
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE (m.title LIKE ? OR m.content LIKE ?)
+      AND m.deleted_at IS NULL
+      AND m.visibility = 'public'
+      ORDER BY m.created_at DESC
+      LIMIT 10
+    `).all(searchTerm, searchTerm);
+
+    res.json(memories);
+  } catch (error) {
+    console.error('搜索记忆错误:', error);
+    res.status(500).json({ error: '搜索记忆失败' });
+  }
+});
+
 // Get single memory
 app.get('/api/memories/:id', optionalAuth, (req, res) => {
   try {
@@ -543,6 +621,87 @@ app.get('/api/memories/:id/related', optionalAuth, (req, res) => {
   }
 });
 
+// 获取记忆的引用列表（当前记忆引用了哪些记忆）
+app.get('/api/memories/:id/references', optionalAuth, (req, res) => {
+  try {
+    const memoryId = req.params.id;
+
+    // 检查记忆是否存在
+    const memory = db.prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    // 获取引用的记忆
+    const references = db.prepare(`
+      SELECT m.id, m.title, m.tags, m.visibility, m.created_at,
+             u.username, u.avatar,
+             mr.created_at as reference_created_at
+      FROM memory_references mr
+      JOIN memories m ON mr.target_memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE mr.source_memory_id = ?
+      AND m.deleted_at IS NULL
+      ORDER BY mr.created_at DESC
+    `).all(memoryId);
+
+    // 过滤不可见的记忆
+    const visibleReferences = references.filter(ref => {
+      if (ref.visibility === 'public') return true;
+      if (req.user && ref.visibility === 'private') {
+        // 私有记忆只有作者可见
+        return db.prepare('SELECT user_id FROM memories WHERE id = ?').get(ref.id)?.user_id === req.user.id;
+      }
+      return false;
+    });
+
+    res.json(visibleReferences);
+  } catch (error) {
+    console.error('获取引用列表错误:', error);
+    res.status(500).json({ error: '获取引用列表失败' });
+  }
+});
+
+// 获取记忆的反向引用列表（哪些记忆引用了当前记忆）
+app.get('/api/memories/:id/backlinks', optionalAuth, (req, res) => {
+  try {
+    const memoryId = req.params.id;
+
+    // 检查记忆是否存在
+    const memory = db.prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    // 获取反向引用的记忆
+    const backlinks = db.prepare(`
+      SELECT m.id, m.title, m.tags, m.visibility, m.created_at,
+             u.username, u.avatar,
+             mr.created_at as reference_created_at
+      FROM memory_references mr
+      JOIN memories m ON mr.source_memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE mr.target_memory_id = ?
+      AND m.deleted_at IS NULL
+      ORDER BY mr.created_at DESC
+    `).all(memoryId);
+
+    // 过滤不可见的记忆
+    const visibleBacklinks = backlinks.filter(ref => {
+      if (ref.visibility === 'public') return true;
+      if (req.user && ref.visibility === 'private') {
+        return db.prepare('SELECT user_id FROM memories WHERE id = ?').get(ref.id)?.user_id === req.user.id;
+      }
+      return false;
+    });
+
+    res.json(visibleBacklinks);
+  } catch (error) {
+    console.error('获取反向引用列表错误:', error);
+    res.status(500).json({ error: '获取反向引用列表失败' });
+  }
+});
+
 // Create memory
 app.post('/api/memories', authMiddleware, (req, res) => {
   const { title, content, tags, visibility } = req.body;
@@ -558,6 +717,9 @@ app.post('/api/memories', authMiddleware, (req, res) => {
       INSERT INTO memories (id, user_id, title, content, tags, visibility)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(memoryId, userId, title, content, tags || '', visibility || 'public');
+
+    // 解析并保存引用关系
+    updateMemoryReferences(memoryId, content);
 
     const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
     res.status(201).json(memory);
@@ -600,10 +762,14 @@ app.put('/api/memories/:id', authMiddleware, (req, res) => {
       `).run(uuidv4(), memoryId, userId, memory.title, memory.content, memory.tags, memory.visibility, versionNumber, changeSummary || null);
 
       // 更新记忆
+      const newContent = content || memory.content;
       db.prepare(`
         UPDATE memories SET title = ?, content = ?, tags = ?, visibility = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(title || memory.title, content || memory.content, tags || memory.tags, visibility || memory.visibility, memoryId);
+      `).run(title || memory.title, newContent, tags || memory.tags, visibility || memory.visibility, memoryId);
+
+      // 解析并更新引用关系
+      updateMemoryReferences(memoryId, newContent);
     }
 
     const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);

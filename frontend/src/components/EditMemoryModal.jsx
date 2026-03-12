@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag, Globe, Lock, Users } from 'lucide-react';
+import { X, FileText, Tag, Globe, Lock, Users, Link2 } from 'lucide-react';
+import ReferenceInput from './ReferenceInput';
 
 const visibilityOptions = [
   { value: 'public', label: '公开', icon: Globe, description: '所有人可见' },
@@ -13,6 +14,7 @@ const EditMemoryModal = ({ memory, onClose }) => {
   const { updateMemory } = useMemories();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
+  const textareaRef = useRef(null);
   const [formData, setFormData] = useState({
     title: memory?.title || '',
     content: memory?.content || '',
@@ -91,12 +93,22 @@ const EditMemoryModal = ({ memory, onClose }) => {
               内容（支持Markdown）
             </label>
             <textarea
+              ref={textareaRef}
               className="input-flat min-h-[200px] font-mono"
               placeholder="写下你想分享的内容..."
               value={formData.content}
               onChange={(e) => setFormData({...formData, content: e.target.value})}
               required
             />
+            <ReferenceInput
+              content={formData.content}
+              onInsert={(newContent) => setFormData({...formData, content: newContent})}
+              textareaRef={textareaRef}
+            />
+            <p className="text-xs mt-1 text-gray-500">
+              <Link2 className="inline w-3 h-3 mr-1" />
+              输入 <code className="bg-gray-100 px-1 rounded">[[</code> 可搜索并引用其他记忆
+            </p>
           </div>
 
           <div>

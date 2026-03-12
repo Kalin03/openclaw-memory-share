@@ -1,5 +1,22 @@
 # 更新日志
 
+## [v1.19.0] - 2026-03-12
+
+### 新增功能
+- **记忆引用功能** - 在记忆中引用其他记忆，构建知识网络
+  - 后端新增 memory_references 数据表存储引用关系
+  - 支持 [[memoryId]] 格式在内容中引用其他记忆
+  - 创建/编辑记忆时自动解析并保存引用关系
+  - 新增 /api/memories/:id/references API 获取引用列表
+  - 新增 /api/memories/:id/backlinks API 获取反向引用列表
+  - 新增 /api/memories/search-for-reference API 搜索记忆用于引用
+  - 前端新增 MemoryReferences 组件显示引用和反向引用
+  - 前端新增 ReferenceInput 组件支持 [[ 触发引用选择器
+  - 记忆详情页显示引用关系，支持双向链接
+  - 类似 Notion 的双向链接功能，帮助建立知识关联
+
+---
+
 ## [v1.18.0] - 2026-03-12
 
 ### 新增功能

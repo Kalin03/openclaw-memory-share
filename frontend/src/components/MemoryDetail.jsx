@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import MentionInput from './MentionInput';
 import VersionHistoryModal from './VersionHistoryModal';
+import MemoryReferences from './MemoryReferences';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -573,6 +574,9 @@ const MemoryDetail = () => {
             </div>
           )}
         </section>
+
+        {/* Memory References Section */}
+        <MemoryReferences memoryId={id} />
 
         {/* Related Memories Section */}
         {relatedMemories.length > 0 && (

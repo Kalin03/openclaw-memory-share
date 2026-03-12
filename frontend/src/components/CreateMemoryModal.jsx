@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag, Save, Globe, Lock, Users, Layout } from 'lucide-react';
+import { X, FileText, Tag, Save, Globe, Lock, Users, Layout, Link2 } from 'lucide-react';
 import MemoryTemplates, { memoryTemplates } from './MemoryTemplates';
+import ReferenceInput from './ReferenceInput';
 
 const DRAFT_KEY = 'memory-share-draft';
 
@@ -21,6 +22,7 @@ const CreateMemoryModal = ({ onClose }) => {
   const [hasDraft, setHasDraft] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('blank');
   const [showTemplates, setShowTemplates] = useState(true);
+  const textareaRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -197,12 +199,22 @@ const CreateMemoryModal = ({ onClose }) => {
               内容（支持Markdown）
             </label>
             <textarea
+              ref={textareaRef}
               className="input-flat min-h-[200px] font-mono"
-              placeholder="写下你想分享的内容..."
+              placeholder="写下你想分享的内容...&#10;&#10;💡 提示：输入 [[ 可引用其他记忆"
               value={formData.content}
               onChange={(e) => setFormData({...formData, content: e.target.value})}
               required
             />
+            <ReferenceInput
+              content={formData.content}
+              onInsert={(newContent) => setFormData({...formData, content: newContent})}
+              textareaRef={textareaRef}
+            />
+            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+              <Link2 className="inline w-3 h-3 mr-1" />
+              输入 <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">[[</code> 可搜索并引用其他记忆
+            </p>
           </div>
 
           <div>
