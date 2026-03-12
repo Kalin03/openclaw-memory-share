@@ -531,6 +531,110 @@ app.get('/api/memories/search-for-reference', optionalAuth, (req, res) => {
   }
 });
 
+// 搜索记忆 API - 必须在 /api/memories/:id 之前
+app.get('/api/memories/search', optionalAuth, (req, res) => {
+  const { q, page = 1, limit = 10 } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+
+  if (!q || q.trim() === '') {
+    return res.json({ memories: [], pagination: { page: 1, limit: limitNum, total: 0, totalPages: 0 } });
+  }
+
+  const searchTerm = `%${q.trim()}%`;
+  const conditions = ['m.deleted_at IS NULL', '(m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?)'];
+  const params = [searchTerm, searchTerm, searchTerm];
+
+  // 可见性过滤
+  if (req.user) {
+    conditions.push("(m.visibility = 'public' OR m.user_id = ?)");
+    params.push(req.user.id);
+  } else {
+    conditions.push("m.visibility = 'public'");
+  }
+
+  const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+  // 获取总数
+  const countSql = `SELECT COUNT(*) as total FROM memories m JOIN users u ON m.user_id = u.id ${whereClause}`;
+  const countResult = db.prepare(countSql).get(...params);
+  const total = countResult.total;
+  const totalPages = Math.ceil(total / limitNum);
+
+  // 获取分页数据
+  const sql = `
+    SELECT m.*, u.username, u.avatar,
+      (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+      (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
+      (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count
+    FROM memories m
+    JOIN users u ON m.user_id = u.id
+    ${whereClause}
+    ORDER BY m.is_pinned DESC, m.created_at DESC
+    LIMIT ? OFFSET ?
+  `;
+  params.push(limitNum, offset);
+
+  try {
+    const memories = db.prepare(sql).all(...params);
+    res.json({
+      memories,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages
+      }
+    });
+  } catch (error) {
+    console.error('搜索记忆错误:', error);
+    res.status(500).json({ error: '搜索失败' });
+  }
+});
+
+// 热门记忆 API - 必须在 /api/memories/:id 之前
+app.get('/api/memories/hot', (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    // 获取总数
+    const countResult = db.prepare(`
+      SELECT COUNT(*) as total FROM memories 
+      WHERE visibility = 'public' AND deleted_at IS NULL
+    `).get();
+    const total = countResult.total;
+    const totalPages = Math.ceil(total / limitNum);
+
+    // 获取分页数据
+    const memories = db.prepare(`
+      SELECT m.*, u.username, u.avatar,
+        (m.likes_count + m.bookmarks_count + m.comments_count + m.views_count) as hot_score
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.visibility = 'public' AND m.deleted_at IS NULL
+      ORDER BY hot_score DESC
+      LIMIT ? OFFSET ?
+    `).all(limitNum, offset);
+
+    res.json({
+      memories,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages
+      }
+    });
+  } catch (error) {
+    console.error('获取热门记忆错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
 // Get single memory
 app.get('/api/memories/:id', optionalAuth, (req, res) => {
   try {
@@ -2186,26 +2290,6 @@ app.get('/api/memories/random', (req, res) => {
     res.json(memory);
   } catch (error) {
     console.error('获取随机记忆错误:', error);
-    res.status(500).json({ error: '获取失败' });
-  }
-});
-
-// Get hot memories
-app.get('/api/memories/hot', (req, res) => {
-  try {
-    const memories = db.prepare(`
-      SELECT m.*, u.username, u.avatar,
-        (m.likes_count + m.bookmarks_count + m.comments_count + m.views_count) as hot_score
-      FROM memories m
-      JOIN users u ON m.user_id = u.id
-      WHERE m.visibility = 'public' AND m.deleted_at IS NULL
-      ORDER BY hot_score DESC
-      LIMIT 10
-    `).all();
-
-    res.json(memories);
-  } catch (error) {
-    console.error('获取热门记忆错误:', error);
     res.status(500).json({ error: '获取失败' });
   }
 });
