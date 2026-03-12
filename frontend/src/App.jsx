@@ -15,11 +15,12 @@ import SeriesDetail from './components/SeriesDetail';
 import CheckinCard from './components/CheckinCard';
 import CheckinLeaderboard from './components/CheckinLeaderboard';
 import HotSeries from './components/HotSeries';
+import BatchOperationsToolbar from './components/BatchOperationsToolbar';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckSquare, Square } from 'lucide-react';
 
 const Home = () => {
   const { loading: authLoading, user } = useAuth();
@@ -31,6 +32,45 @@ const Home = () => {
   const [activeTab, setActiveTab] = useState('latest');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  
+  // Batch selection state
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  // Handle selection toggle
+  const handleSelectToggle = (memoryId) => {
+    setSelectedIds(prev => 
+      prev.includes(memoryId) 
+        ? prev.filter(id => id !== memoryId)
+        : [...prev, memoryId]
+    );
+  };
+
+  // Clear selection
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
+  // Handle batch operation complete
+  const handleBatchComplete = () => {
+    handleClearSelection();
+    // Refresh memories
+    if (isSearchMode) {
+      searchMemories(searchQuery, page);
+    } else if (activeTab === 'latest') {
+      fetchMemories(page);
+    } else if (activeTab === 'hot') {
+      fetchHotMemories(page);
+    } else if (activeTab === 'following') {
+      fetchFollowingMemories(page);
+    }
+  };
+
+  // Reset selection when tab changes
+  useEffect(() => {
+    setIsSelectMode(false);
+    setSelectedIds([]);
+  }, [activeTab]);
 
   // 处理 URL 参数：search 和 edit
   useEffect(() => {
@@ -141,7 +181,7 @@ const Home = () => {
             
             {/* Tab Switcher */}
             {!isSearchMode && (
-              <div className="flex gap-2 mb-6">
+              <div className="flex gap-2 mb-6 items-center flex-wrap">
                 <button
                   onClick={() => handleTabChange('latest')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
@@ -178,6 +218,27 @@ const Home = () => {
                   >
                     <Users size={18} />
                     关注
+                  </button>
+                )}
+                
+                {/* Batch Select Toggle - only show for logged in users */}
+                {user && memories.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setIsSelectMode(!isSelectMode);
+                      if (isSelectMode) {
+                        setSelectedIds([]);
+                      }
+                    }}
+                    className={`ml-auto flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                      isSelectMode
+                        ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md'
+                        : 'text-gray-600 hover:bg-gray-50 border'
+                    }`}
+                    style={!isSelectMode ? { backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' } : {}}
+                  >
+                    {isSelectMode ? <CheckSquare size={18} /> : <Square size={18} />}
+                    {isSelectMode ? '取消选择' : '批量选择'}
                   </button>
                 )}
               </div>
@@ -248,6 +309,9 @@ const Home = () => {
                         onEdit={handleEdit}
                         onTagClick={handleTagClick}
                         searchQuery={isSearchMode ? searchQuery : null}
+                        isSelectMode={isSelectMode}
+                        isSelected={selectedIds.includes(memory.id)}
+                        onSelect={handleSelectToggle}
                       />
                     </div>
                   ))}
@@ -319,6 +383,16 @@ const Home = () => {
       
       {/* Back to Top Button */}
       <BackToTop />
+      
+      {/* Batch Operations Toolbar */}
+      {isSelectMode && selectedIds.length > 0 && (
+        <BatchOperationsToolbar
+          selectedIds={selectedIds}
+          onClearSelection={handleClearSelection}
+          onComplete={handleBatchComplete}
+          userId={user?.id}
+        />
+      )}
     </div>
   );
 };

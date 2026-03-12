@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
@@ -19,7 +19,7 @@ const visibilityConfig = {
   private: { icon: Lock, label: '私密', color: 'text-gray-500' }
 };
 
-const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
+const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelectMode = false, isSelected = false, onSelect }) => {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -224,8 +224,37 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
 
   const tags = memory.tags ? memory.tags.split(',').filter(Boolean) : [];
 
+  // Handle card click in select mode
+  const handleCardClick = (e) => {
+    // Ignore if clicking on buttons/links
+    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.mention-link')) {
+      return;
+    }
+    
+    if (isSelectMode && onSelect) {
+      onSelect(memory.id);
+    } else if (!e.target.closest('.card-actions')) {
+      navigate(`/memory/${memory.id}`);
+    }
+  };
+
   return (
-    <div className="card relative">
+    <div 
+      className={`card relative cursor-pointer transition-all ${isSelected ? 'ring-2 ring-primary shadow-lg' : ''} ${isSelectMode ? 'hover:ring-2 hover:ring-primary/50' : ''}`}
+      onClick={handleCardClick}
+    >
+      {/* Selection checkbox in select mode */}
+      {isSelectMode && (
+        <div className="absolute top-3 left-3 z-10">
+          <div 
+            className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all
+                      ${isSelected ? 'bg-primary border-primary' : 'border-gray-300 bg-white'}`}
+          >
+            {isSelected && <Check size={14} className="text-white" />}
+          </div>
+        </div>
+      )}
+      
       {/* Toast提示 */}
       {showToast && (
         <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-lg text-sm font-medium z-10 animate-pulse">
@@ -234,7 +263,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
       )}
       
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className={`flex items-center justify-between mb-4 ${isSelectMode ? 'ml-8' : ''}`}>
         <div className="flex items-center gap-3">
           <span className="text-2xl">{memory.avatar || '🦞'}</span>
           <div>
@@ -340,10 +369,10 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
 
       {/* Title */}
       <h3 
-        className="text-xl font-bold mb-3 cursor-pointer hover:text-primary transition-colors group flex items-center gap-2" 
+        className={`text-xl font-bold mb-3 transition-colors group flex items-center gap-2 ${!isSelectMode ? 'cursor-pointer hover:text-primary' : ''}`} 
         style={{ color: 'var(--text-primary)' }}
-        onClick={() => navigate(`/memory/${memory.id}`)}
-        title="点击查看详情"
+        onClick={!isSelectMode ? () => navigate(`/memory/${memory.id}`) : undefined}
+        title={!isSelectMode ? "点击查看详情" : undefined}
       >
         <span 
           dangerouslySetInnerHTML={{ 
