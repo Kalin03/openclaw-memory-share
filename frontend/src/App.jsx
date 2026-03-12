@@ -16,6 +16,7 @@ import CheckinCard from './components/CheckinCard';
 import CheckinLeaderboard from './components/CheckinLeaderboard';
 import HotSeries from './components/HotSeries';
 import BatchOperationsToolbar from './components/BatchOperationsToolbar';
+import Moments from './components/Moments';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -30,6 +31,7 @@ const Home = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showMoments, setShowMoments] = useState(false);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
   const [searchParams] = useSearchParams();
@@ -42,7 +44,7 @@ const Home = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   
   // Track if any modal is open
-  const hasOpenModal = showAuthModal || showCreateModal || showProfileModal || editingMemory;
+  const hasOpenModal = showAuthModal || showCreateModal || showProfileModal || editingMemory || showMoments;
   
   // Keyboard shortcuts
   const { showHelp, setShowHelp, ShortcutsHelp: ShortcutsHelpModal } = useKeyboardShortcuts({
@@ -211,6 +213,7 @@ const Home = () => {
         onCreateClick={() => setShowCreateModal(true)}
         onSearch={handleSearch}
         onProfileClick={() => setShowProfileModal(true)}
+        onMomentsClick={() => setShowMoments(true)}
       />
 
       {/* Hero Section */}
@@ -452,6 +455,7 @@ const Home = () => {
         navigate(window.location.pathname);
       }} />}
       {showProfileModal && <UserProfile onClose={() => setShowProfileModal(false)} />}
+      {showMoments && <Moments user={user} onBack={() => setShowMoments(false)} />}
       
       {/* Keyboard Shortcuts Help Modal */}
       <ShortcutsHelpModal />

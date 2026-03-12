@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2, Bookmark } from 'lucide-react';
+import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2, Bookmark, Flame } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import TrashModal from './TrashModal';
 import FollowedTags from './FollowedTags';
@@ -9,7 +9,7 @@ import FollowedTags from './FollowedTags';
 const SEARCH_HISTORY_KEY = 'memory-share-search-history';
 const MAX_HISTORY = 10;
 
-const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
+const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMomentsClick }) => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -193,6 +193,16 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
 
             {/* Notification Bell */}
             <NotificationBell user={user} />
+
+            {/* Moments (沸点) */}
+            <button
+              onClick={onMomentsClick}
+              className="p-2 rounded-lg hover:opacity-80 transition-colors"
+              style={{ backgroundColor: 'var(--bg-tertiary)' }}
+              title="沸点"
+            >
+              <Flame size={20} className="text-orange-500" />
+            </button>
 
             {/* Followed Tags */}
             {user && (

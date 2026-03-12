@@ -237,6 +237,42 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(source_memory_id, target_memory_id)
   );
+
+  CREATE TABLE IF NOT EXISTS moments (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    images TEXT DEFAULT '',
+    topics TEXT DEFAULT '',
+    likes_count INTEGER DEFAULT 0,
+    comments_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS moment_likes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    moment_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, moment_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS moment_comments (
+    id TEXT PRIMARY KEY,
+    moment_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    likes_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS moment_comment_likes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    comment_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, comment_id)
+  );
 `);
 
 // Create indexes for memory_references
@@ -2957,6 +2993,408 @@ app.get('/api/tags/followed-memories', optionalAuth, (req, res) => {
     });
   } catch (error) {
     console.error('获取关注标签记忆错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// ==================== Moments (沸点) Routes ====================
+
+// Get moments list
+app.get('/api/moments', optionalAuth, (req, res) => {
+  const { page = 1, limit = 10, topic } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    let countSql, sql, countParams = [], params = [];
+
+    if (topic) {
+      // Filter by topic
+      countSql = `SELECT COUNT(*) as total FROM moments WHERE topics LIKE '%' || ? || '%'`;
+      countParams = [topic];
+      sql = `
+        SELECT m.*, u.username, u.avatar,
+          (SELECT COUNT(*) FROM moment_likes WHERE moment_id = m.id) as likes_count,
+          (SELECT COUNT(*) FROM moment_comments WHERE moment_id = m.id) as comments_count
+        FROM moments m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.topics LIKE '%' || ? || '%'
+        ORDER BY m.created_at DESC
+        LIMIT ? OFFSET ?
+      `;
+      params = [topic, limitNum, offset];
+    } else {
+      countSql = `SELECT COUNT(*) as total FROM moments`;
+      sql = `
+        SELECT m.*, u.username, u.avatar,
+          (SELECT COUNT(*) FROM moment_likes WHERE moment_id = m.id) as likes_count,
+          (SELECT COUNT(*) FROM moment_comments WHERE moment_id = m.id) as comments_count
+        FROM moments m
+        JOIN users u ON m.user_id = u.id
+        ORDER BY m.created_at DESC
+        LIMIT ? OFFSET ?
+      `;
+      params = [limitNum, offset];
+    }
+
+    const countResult = db.prepare(countSql).get(...countParams);
+    const total = countResult.total;
+    const totalPages = Math.ceil(total / limitNum);
+
+    const moments = db.prepare(sql).all(...params);
+
+    // Check if user liked each moment
+    let momentsWithLikeStatus = moments;
+    if (req.user) {
+      const userId = req.user.id;
+      momentsWithLikeStatus = moments.map(moment => {
+        const liked = db.prepare('SELECT 1 FROM moment_likes WHERE user_id = ? AND moment_id = ?').get(userId, moment.id);
+        return { ...moment, is_liked: !!liked };
+      });
+    }
+
+    res.json({
+      moments: momentsWithLikeStatus,
+      pagination: { page: pageNum, limit: limitNum, total, totalPages }
+    });
+  } catch (error) {
+    console.error('获取沸点列表错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Get single moment
+app.get('/api/moments/:id', optionalAuth, (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const moment = db.prepare(`
+      SELECT m.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM moment_likes WHERE moment_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM moment_comments WHERE moment_id = m.id) as comments_count
+      FROM moments m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.id = ?
+    `).get(id);
+
+    if (!moment) {
+      return res.status(404).json({ error: '沸点不存在' });
+    }
+
+    // Check if user liked
+    if (req.user) {
+      const liked = db.prepare('SELECT 1 FROM moment_likes WHERE user_id = ? AND moment_id = ?').get(req.user.id, id);
+      moment.is_liked = !!liked;
+    }
+
+    res.json(moment);
+  } catch (error) {
+    console.error('获取沸点详情错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Create moment
+app.post('/api/moments', authMiddleware, upload.array('images', 9), (req, res) => {
+  const { content, topics } = req.body;
+  const userId = req.user.id;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: '内容不能为空' });
+  }
+
+  if (content.length > 500) {
+    return res.status(400).json({ error: '内容不能超过500字' });
+  }
+
+  try {
+    const momentId = uuidv4();
+    
+    // Process uploaded images
+    const images = req.files ? req.files.map(f => `/uploads/${f.filename}`).join(',') : '';
+    
+    // Process topics (hashtags)
+    const topicsStr = topics ? topics : '';
+
+    db.prepare(`
+      INSERT INTO moments (id, user_id, content, images, topics)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(momentId, userId, content.trim(), images, topicsStr);
+
+    const moment = db.prepare(`
+      SELECT m.*, u.username, u.avatar
+      FROM moments m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.id = ?
+    `).get(momentId);
+
+    res.status(201).json(moment);
+  } catch (error) {
+    console.error('创建沸点错误:', error);
+    res.status(500).json({ error: '发布失败' });
+  }
+});
+
+// Delete moment
+app.delete('/api/moments/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const moment = db.prepare('SELECT * FROM moments WHERE id = ?').get(id);
+    
+    if (!moment) {
+      return res.status(404).json({ error: '沸点不存在' });
+    }
+
+    if (moment.user_id !== userId) {
+      return res.status(403).json({ error: '无权删除此沸点' });
+    }
+
+    // Delete related data
+    db.prepare('DELETE FROM moment_likes WHERE moment_id = ?').run(id);
+    db.prepare('DELETE FROM moment_comments WHERE moment_id = ?').run(id);
+    db.prepare('DELETE FROM moments WHERE id = ?').run(id);
+
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除沸点错误:', error);
+    res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// Like moment
+app.post('/api/moments/:id/like', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const moment = db.prepare('SELECT id FROM moments WHERE id = ?').get(id);
+    if (!moment) {
+      return res.status(404).json({ error: '沸点不存在' });
+    }
+
+    const existing = db.prepare('SELECT * FROM moment_likes WHERE user_id = ? AND moment_id = ?').get(userId, id);
+    if (existing) {
+      return res.status(400).json({ error: '已经点赞过了' });
+    }
+
+    db.prepare('INSERT INTO moment_likes (id, user_id, moment_id) VALUES (?, ?, ?)').run(uuidv4(), userId, id);
+
+    const likesCount = db.prepare('SELECT COUNT(*) as count FROM moment_likes WHERE moment_id = ?').get(id);
+
+    res.json({ message: '点赞成功', likes_count: likesCount.count });
+  } catch (error) {
+    console.error('点赞沸点错误:', error);
+    res.status(500).json({ error: '点赞失败' });
+  }
+});
+
+// Unlike moment
+app.delete('/api/moments/:id/like', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const result = db.prepare('DELETE FROM moment_likes WHERE user_id = ? AND moment_id = ?').run(userId, id);
+
+    if (result.changes === 0) {
+      return res.status(400).json({ error: '尚未点赞' });
+    }
+
+    const likesCount = db.prepare('SELECT COUNT(*) as count FROM moment_likes WHERE moment_id = ?').get(id);
+
+    res.json({ message: '已取消点赞', likes_count: likesCount.count });
+  } catch (error) {
+    console.error('取消点赞沸点错误:', error);
+    res.status(500).json({ error: '取消点赞失败' });
+  }
+});
+
+// Get moment comments
+app.get('/api/moments/:id/comments', (req, res) => {
+  const { id } = req.params;
+  const { page = 1, limit = 20 } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 20;
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    const comments = db.prepare(`
+      SELECT mc.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM moment_comment_likes WHERE comment_id = mc.id) as likes_count
+      FROM moment_comments mc
+      JOIN users u ON mc.user_id = u.id
+      WHERE mc.moment_id = ?
+      ORDER BY mc.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(id, limitNum, offset);
+
+    res.json(comments);
+  } catch (error) {
+    console.error('获取沸点评论错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Add moment comment
+app.post('/api/moments/:id/comments', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  const userId = req.user.id;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: '评论内容不能为空' });
+  }
+
+  if (content.length > 200) {
+    return res.status(400).json({ error: '评论不能超过200字' });
+  }
+
+  try {
+    const moment = db.prepare('SELECT id FROM moments WHERE id = ?').get(id);
+    if (!moment) {
+      return res.status(404).json({ error: '沸点不存在' });
+    }
+
+    const commentId = uuidv4();
+    db.prepare(`
+      INSERT INTO moment_comments (id, moment_id, user_id, content)
+      VALUES (?, ?, ?, ?)
+    `).run(commentId, id, userId, content.trim());
+
+    const comment = db.prepare(`
+      SELECT mc.*, u.username, u.avatar
+      FROM moment_comments mc
+      JOIN users u ON mc.user_id = u.id
+      WHERE mc.id = ?
+    `).get(commentId);
+
+    res.status(201).json(comment);
+  } catch (error) {
+    console.error('添加沸点评论错误:', error);
+    res.status(500).json({ error: '评论失败' });
+  }
+});
+
+// Delete moment comment
+app.delete('/api/moments/:momentId/comments/:commentId', authMiddleware, (req, res) => {
+  const { momentId, commentId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const comment = db.prepare('SELECT * FROM moment_comments WHERE id = ? AND moment_id = ?').get(commentId, momentId);
+    
+    if (!comment) {
+      return res.status(404).json({ error: '评论不存在' });
+    }
+
+    if (comment.user_id !== userId) {
+      return res.status(403).json({ error: '无权删除此评论' });
+    }
+
+    db.prepare('DELETE FROM moment_comment_likes WHERE comment_id = ?').run(commentId);
+    db.prepare('DELETE FROM moment_comments WHERE id = ?').run(commentId);
+
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除沸点评论错误:', error);
+    res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// Like moment comment
+app.post('/api/moments/:momentId/comments/:commentId/like', authMiddleware, (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const existing = db.prepare('SELECT * FROM moment_comment_likes WHERE user_id = ? AND comment_id = ?').get(userId, commentId);
+    if (existing) {
+      return res.status(400).json({ error: '已经点赞过了' });
+    }
+
+    db.prepare('INSERT INTO moment_comment_likes (id, user_id, comment_id) VALUES (?, ?, ?)').run(uuidv4(), userId, commentId);
+
+    res.json({ message: '点赞成功' });
+  } catch (error) {
+    console.error('点赞评论错误:', error);
+    res.status(500).json({ error: '点赞失败' });
+  }
+});
+
+// Unlike moment comment
+app.delete('/api/moments/:momentId/comments/:commentId/like', authMiddleware, (req, res) => {
+  const { commentId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    db.prepare('DELETE FROM moment_comment_likes WHERE user_id = ? AND comment_id = ?').run(userId, commentId);
+    res.json({ message: '已取消点赞' });
+  } catch (error) {
+    console.error('取消点赞评论错误:', error);
+    res.status(500).json({ error: '取消点赞失败' });
+  }
+});
+
+// Get hot topics
+app.get('/api/moments/topics/hot', (req, res) => {
+  const { limit = 10 } = req.query;
+
+  try {
+    // Extract all topics from moments and count
+    const moments = db.prepare("SELECT topics FROM moments WHERE topics IS NOT NULL AND topics != ''").all();
+    
+    const topicCounts = {};
+    moments.forEach(m => {
+      if (m.topics) {
+        const topics = m.topics.split(',').filter(Boolean);
+        topics.forEach(t => {
+          const topic = t.trim().toLowerCase();
+          if (topic) {
+            topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    // Sort by count and return top N
+    const sortedTopics = Object.entries(topicCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, parseInt(limit) || 10)
+      .map(([name, count]) => ({ name, count }));
+
+    res.json(sortedTopics);
+  } catch (error) {
+    console.error('获取热门话题错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Get user's moments
+app.get('/api/users/:id/moments', (req, res) => {
+  const { id } = req.params;
+  const { page = 1, limit = 10 } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+
+  try {
+    const moments = db.prepare(`
+      SELECT m.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM moment_likes WHERE moment_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM moment_comments WHERE moment_id = m.id) as comments_count
+      FROM moments m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.user_id = ?
+      ORDER BY m.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(id, limitNum, offset);
+
+    res.json(moments);
+  } catch (error) {
+    console.error('获取用户沸点错误:', error);
     res.status(500).json({ error: '获取失败' });
   }
 });
