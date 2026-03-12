@@ -195,6 +195,32 @@ db.exec(`
     FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS collections (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    icon TEXT DEFAULT '📁',
+    is_public INTEGER DEFAULT 0,
+    memories_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS collection_memories (
+    id TEXT PRIMARY KEY,
+    collection_id TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(collection_id, memory_id),
+    FOREIGN KEY (collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+    FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 // 添加 deleted_at 字段（回收站功能）
@@ -1885,6 +1911,376 @@ app.delete('/api/trash', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('清空回收站错误:', error);
     res.status(500).json({ error: '清空回收站失败' });
+  }
+});
+
+// ==================== Collection Routes ====================
+
+// Get user's collections
+app.get('/api/collections', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const collections = db.prepare(`
+      SELECT c.*,
+        (SELECT COUNT(*) FROM collection_memories WHERE collection_id = c.id) as memories_count
+      FROM collections c
+      WHERE c.user_id = ?
+      ORDER BY c.updated_at DESC
+    `).all(userId);
+
+    res.json(collections);
+  } catch (error) {
+    console.error('获取收藏夹列表错误:', error);
+    res.status(500).json({ error: '获取收藏夹列表失败' });
+  }
+});
+
+// Get public collections for a user
+app.get('/api/users/:userId/collections', (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const collections = db.prepare(`
+      SELECT c.*,
+        (SELECT COUNT(*) FROM collection_memories WHERE collection_id = c.id) as memories_count
+      FROM collections c
+      WHERE c.user_id = ? AND c.is_public = 1
+      ORDER BY c.updated_at DESC
+    `).all(userId);
+
+    res.json(collections);
+  } catch (error) {
+    console.error('获取公开收藏夹列表错误:', error);
+    res.status(500).json({ error: '获取公开收藏夹列表失败' });
+  }
+});
+
+// Get collection by ID
+app.get('/api/collections/:id', (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  try {
+    const collection = db.prepare(`
+      SELECT c.*, u.username, u.avatar
+      FROM collections c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.id = ?
+    `).get(id);
+
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    // Check access permission
+    if (!collection.is_public && collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权查看此收藏夹' });
+    }
+
+    res.json(collection);
+  } catch (error) {
+    console.error('获取收藏夹详情错误:', error);
+    res.status(500).json({ error: '获取收藏夹详情失败' });
+  }
+});
+
+// Get memories in a collection
+app.get('/api/collections/:id/memories', optionalAuth, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const offset = (page - 1) * limit;
+
+  try {
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(id);
+
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    // Check access permission
+    if (!collection.is_public && collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权查看此收藏夹' });
+    }
+
+    const memories = db.prepare(`
+      SELECT m.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
+        (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count,
+        cm.sort_order, cm.added_at as collected_at
+      FROM collection_memories cm
+      JOIN memories m ON cm.memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE cm.collection_id = ? AND m.deleted_at IS NULL
+      ORDER BY cm.sort_order ASC, cm.added_at DESC
+      LIMIT ? OFFSET ?
+    `).all(id, limit, offset);
+
+    const totalResult = db.prepare(`
+      SELECT COUNT(*) as total
+      FROM collection_memories cm
+      JOIN memories m ON cm.memory_id = m.id
+      WHERE cm.collection_id = ? AND m.deleted_at IS NULL
+    `).get(id);
+
+    // Check if current user liked/bookmarked each memory
+    const memoriesWithStatus = memories.map(memory => {
+      let liked = false;
+      let bookmarked = false;
+
+      if (userId) {
+        const like = db.prepare('SELECT 1 FROM likes WHERE user_id = ? AND memory_id = ?').get(userId, memory.id);
+        const bookmark = db.prepare('SELECT 1 FROM bookmarks WHERE user_id = ? AND memory_id = ?').get(userId, memory.id);
+        liked = !!like;
+        bookmarked = !!bookmark;
+      }
+
+      return {
+        ...memory,
+        liked,
+        bookmarked,
+        tags: memory.tags ? memory.tags.split(',').filter(Boolean) : []
+      };
+    });
+
+    res.json({
+      collection,
+      memories: memoriesWithStatus,
+      pagination: {
+        page,
+        limit,
+        total: totalResult.total,
+        totalPages: Math.ceil(totalResult.total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取收藏夹记忆错误:', error);
+    res.status(500).json({ error: '获取收藏夹记忆失败' });
+  }
+});
+
+// Create collection
+app.post('/api/collections', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { name, description, icon, is_public } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: '收藏夹名称不能为空' });
+  }
+
+  try {
+    const collectionId = uuidv4();
+    db.prepare(`
+      INSERT INTO collections (id, user_id, name, description, icon, is_public)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(collectionId, userId, name.trim(), description || '', icon || '📁', is_public ? 1 : 0);
+
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(collectionId);
+    res.status(201).json(collection);
+  } catch (error) {
+    console.error('创建收藏夹错误:', error);
+    res.status(500).json({ error: '创建收藏夹失败' });
+  }
+});
+
+// Update collection
+app.put('/api/collections/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { name, description, icon, is_public } = req.body;
+
+  try {
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(id);
+
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    if (collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此收藏夹' });
+    }
+
+    db.prepare(`
+      UPDATE collections
+      SET name = COALESCE(?, name),
+          description = COALESCE(?, description),
+          icon = COALESCE(?, icon),
+          is_public = COALESCE(?, is_public),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(name, description, icon, is_public === undefined ? null : (is_public ? 1 : 0), id);
+
+    const updated = db.prepare('SELECT * FROM collections WHERE id = ?').get(id);
+    res.json(updated);
+  } catch (error) {
+    console.error('更新收藏夹错误:', error);
+    res.status(500).json({ error: '更新收藏夹失败' });
+  }
+});
+
+// Delete collection
+app.delete('/api/collections/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(id);
+
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    if (collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权删除此收藏夹' });
+    }
+
+    // Delete collection memories first (cascade should handle this, but let's be explicit)
+    db.prepare('DELETE FROM collection_memories WHERE collection_id = ?').run(id);
+    db.prepare('DELETE FROM collections WHERE id = ?').run(id);
+
+    res.json({ message: '收藏夹已删除' });
+  } catch (error) {
+    console.error('删除收藏夹错误:', error);
+    res.status(500).json({ error: '删除收藏夹失败' });
+  }
+});
+
+// Add memory to collection
+app.post('/api/collections/:id/memories/:memoryId', authMiddleware, (req, res) => {
+  const { id: collectionId, memoryId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(collectionId);
+
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    if (collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此收藏夹' });
+    }
+
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    // Check if already in collection
+    const existing = db.prepare('SELECT * FROM collection_memories WHERE collection_id = ? AND memory_id = ?').get(collectionId, memoryId);
+    if (existing) {
+      return res.status(400).json({ error: '记忆已在此收藏夹中' });
+    }
+
+    // Get max sort order
+    const maxSort = db.prepare('SELECT MAX(sort_order) as max_sort FROM collection_memories WHERE collection_id = ?').get(collectionId);
+    const sortOrder = (maxSort?.max_sort || 0) + 1;
+
+    const cmId = uuidv4();
+    db.prepare(`
+      INSERT INTO collection_memories (id, collection_id, memory_id, user_id, sort_order)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(cmId, collectionId, memoryId, userId, sortOrder);
+
+    // Update collection's updated_at
+    db.prepare('UPDATE collections SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(collectionId);
+
+    res.status(201).json({ message: '已添加到收藏夹', sort_order: sortOrder });
+  } catch (error) {
+    console.error('添加记忆到收藏夹错误:', error);
+    res.status(500).json({ error: '添加记忆到收藏夹失败' });
+  }
+});
+
+// Remove memory from collection
+app.delete('/api/collections/:id/memories/:memoryId', authMiddleware, (req, res) => {
+  const { id: collectionId, memoryId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(collectionId);
+
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    if (collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此收藏夹' });
+    }
+
+    const result = db.prepare('DELETE FROM collection_memories WHERE collection_id = ? AND memory_id = ?').run(collectionId, memoryId);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: '记忆不在此收藏夹中' });
+    }
+
+    // Update collection's updated_at
+    db.prepare('UPDATE collections SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(collectionId);
+
+    res.json({ message: '已从收藏夹移除' });
+  } catch (error) {
+    console.error('从收藏夹移除记忆错误:', error);
+    res.status(500).json({ error: '从收藏夹移除记忆失败' });
+  }
+});
+
+// Reorder memories in collection
+app.put('/api/collections/:id/reorder', authMiddleware, (req, res) => {
+  const { id: collectionId } = req.params;
+  const userId = req.user.id;
+  const { memoryIds } = req.body;
+
+  if (!memoryIds || !Array.isArray(memoryIds)) {
+    return res.status(400).json({ error: '无效的记忆ID列表' });
+  }
+
+  try {
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(collectionId);
+
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    if (collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此收藏夹' });
+    }
+
+    // Update sort order for each memory
+    const updateStmt = db.prepare('UPDATE collection_memories SET sort_order = ? WHERE collection_id = ? AND memory_id = ?');
+    for (let i = 0; i < memoryIds.length; i++) {
+      updateStmt.run(i, collectionId, memoryIds[i]);
+    }
+
+    // Update collection's updated_at
+    db.prepare('UPDATE collections SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(collectionId);
+
+    res.json({ message: '排序已更新' });
+  } catch (error) {
+    console.error('更新收藏夹排序错误:', error);
+    res.status(500).json({ error: '更新收藏夹排序失败' });
+  }
+});
+
+// Check which collections a memory is in
+app.get('/api/memories/:id/collections', authMiddleware, (req, res) => {
+  const { id: memoryId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const collections = db.prepare(`
+      SELECT c.id, c.name, c.icon
+      FROM collection_memories cm
+      JOIN collections c ON cm.collection_id = c.id
+      WHERE cm.memory_id = ? AND c.user_id = ?
+    `).all(memoryId, userId);
+
+    res.json(collections);
+  } catch (error) {
+    console.error('获取记忆收藏夹错误:', error);
+    res.status(500).json({ error: '获取记忆收藏夹失败' });
   }
 });
 

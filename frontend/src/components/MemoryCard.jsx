@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
 import axios from 'axios';
 import AddToSeriesModal from './AddToSeriesModal';
+import AddToCollectionModal from './AddToCollectionModal';
 
 const API_URL = '/api';
 const BASE_URL = window.location.origin;
@@ -35,6 +36,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [showAddToSeries, setShowAddToSeries] = useState(false);
+  const [showAddToCollection, setShowAddToCollection] = useState(false);
 
   // 检查关注状态
   useEffect(() => {
@@ -293,6 +295,18 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
             {shareCopied ? <Check size={18} /> : <Share2 size={18} />}
           </button>
           
+          {/* Add to Collection Button - only for bookmarked memories */}
+          {user && isBookmarked && (
+            <button
+              onClick={() => setShowAddToCollection(true)}
+              className="p-2 rounded-lg text-gray-500 hover:text-amber-500 transition-colors"
+              style={{ backgroundColor: 'var(--bg-tertiary)' }}
+              title="添加到收藏夹"
+            >
+              <FolderPlus size={18} />
+            </button>
+          )}
+          
           {user?.id === memory.user_id && (
             <>
               <button
@@ -474,6 +488,15 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery }) => {
           onAdded={() => {
             toast.success('已添加到系列');
           }}
+        />
+      )}
+      
+      {/* Add to Collection Modal */}
+      {showAddToCollection && (
+        <AddToCollectionModal
+          memoryId={memory.id}
+          onClose={() => setShowAddToCollection(false)}
+          onUpdated={() => {}}
         />
       )}
     </div>
