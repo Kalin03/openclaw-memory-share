@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, useSearchParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Routes, Route, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import MemoryCard from './components/MemoryCard';
 import MemoryCardSkeleton from './components/MemoryCardSkeleton';
@@ -16,15 +16,17 @@ import CheckinCard from './components/CheckinCard';
 import CheckinLeaderboard from './components/CheckinLeaderboard';
 import HotSeries from './components/HotSeries';
 import BatchOperationsToolbar from './components/BatchOperationsToolbar';
+import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
-import { ToastProvider } from './context/ToastContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckSquare, Square } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckSquare, Square, Keyboard } from 'lucide-react';
 
 const Home = () => {
   const { loading: authLoading, user } = useAuth();
   const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory, fetchHotMemories, fetchFollowingMemories, isFollowingMode } = useMemories();
+  const { showToast } = useToast();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -32,10 +34,63 @@ const Home = () => {
   const [activeTab, setActiveTab] = useState('latest');
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchInputRef = useRef(null);
   
   // Batch selection state
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  
+  // Track if any modal is open
+  const hasOpenModal = showAuthModal || showCreateModal || showProfileModal || editingMemory;
+  
+  // Keyboard shortcuts
+  const { showHelp, setShowHelp, ShortcutsHelp: ShortcutsHelpModal } = useKeyboardShortcuts({
+    onCreateMemory: () => {
+      if (user) {
+        setShowCreateModal(true);
+      } else {
+        setShowAuthModal(true);
+        showToast('请先登录后再创建记忆', 'info');
+      }
+    },
+    onFocusSearch: () => {
+      const searchInput = document.querySelector('input[type="text"][placeholder*="搜索"]');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    },
+    onRandomMemory: () => {
+      // Scroll to random memory section and click "换一条"
+      const refreshBtn = document.querySelector('[title="换一条"]');
+      if (refreshBtn) {
+        refreshBtn.click();
+        showToast('已为你切换随机记忆', 'success');
+      }
+    },
+    onGoHome: () => {
+      navigate('/');
+      showToast('已返回首页', 'success');
+    },
+    onGoProfile: () => {
+      if (user) {
+        setShowProfileModal(true);
+      } else {
+        setShowAuthModal(true);
+        showToast('请先登录', 'info');
+      }
+    },
+    onCloseModal: () => {
+      // Close any open modal
+      if (editingMemory) setEditingMemory(null);
+      else if (showCreateModal) setShowCreateModal(false);
+      else if (showProfileModal) setShowProfileModal(false);
+      else if (showAuthModal) setShowAuthModal(false);
+      else if (showHelp) setShowHelp(false);
+    },
+    isEnabled: location.pathname === '/', // Only enable on home page
+  });
 
   // Handle selection toggle
   const handleSelectToggle = (memoryId) => {
@@ -354,6 +409,23 @@ const Home = () => {
               <CheckinLeaderboard />
               <HotSeries />
               <TagCloud onTagClick={handleTagClick} />
+              
+              {/* Keyboard Shortcuts Hint */}
+              <div 
+                className="p-4 rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-shadow"
+                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }}
+                onClick={() => setShowHelp(true)}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Keyboard size={18} className="text-primary" />
+                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>快捷键</span>
+                </div>
+                <div className="text-xs space-y-1" style={{ color: 'var(--text-secondary)' }}>
+                  <p><kbd className="px-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">N</kbd> 新建记忆</p>
+                  <p><kbd className="px-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">/</kbd> 搜索</p>
+                  <p><kbd className="px-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">?</kbd> 查看全部</p>
+                </div>
+              </div>
             </div>
           </aside>
         </div>
@@ -380,6 +452,9 @@ const Home = () => {
         navigate(window.location.pathname);
       }} />}
       {showProfileModal && <UserProfile onClose={() => setShowProfileModal(false)} />}
+      
+      {/* Keyboard Shortcuts Help Modal */}
+      <ShortcutsHelpModal />
       
       {/* Back to Top Button */}
       <BackToTop />
