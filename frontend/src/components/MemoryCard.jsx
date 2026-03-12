@@ -8,6 +8,7 @@ import { highlightText } from '../utils/highlight';
 import axios from 'axios';
 import AddToSeriesModal from './AddToSeriesModal';
 import AddToCollectionModal from './AddToCollectionModal';
+import EmbedContent from './EmbedContent';
 
 const API_URL = '/api';
 const BASE_URL = window.location.origin;
@@ -415,6 +416,9 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
           <ReactMarkdown>{memory.content}</ReactMarkdown>
         )}
       </div>
+
+      {/* Embed Content */}
+      <EmbedContent content={memory.content} />
 
       {/* Tags */}
       {tags.length > 0 && (

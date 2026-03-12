@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import MentionInput from './MentionInput';
 import VersionHistoryModal from './VersionHistoryModal';
 import MemoryReferences from './MemoryReferences';
+import EmbedContent from './EmbedContent';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -413,6 +414,9 @@ const MemoryDetail = () => {
           <div className="prose prose-lg max-w-none mb-6" style={{ color: 'var(--text-secondary)' }}>
             <ReactMarkdown>{memory.content}</ReactMarkdown>
           </div>
+
+          {/* Embed Content */}
+          <EmbedContent content={memory.content} />
 
           {/* Tags */}
           {tags.length > 0 && (
