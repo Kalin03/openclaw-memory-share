@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2 } from 'lucide-react';
+import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2, Bookmark } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import TrashModal from './TrashModal';
+import FollowedTags from './FollowedTags';
 
 const SEARCH_HISTORY_KEY = 'memory-share-search-history';
 const MAX_HISTORY = 10;
@@ -15,6 +16,7 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
   const [searchHistory, setSearchHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [showFollowedTags, setShowFollowedTags] = useState(false);
   const searchInputRef = useRef(null);
   const historyRef = useRef(null);
 
@@ -192,6 +194,18 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
             {/* Notification Bell */}
             <NotificationBell user={user} />
 
+            {/* Followed Tags */}
+            {user && (
+              <button
+                onClick={() => setShowFollowedTags(true)}
+                className="p-2 rounded-lg hover:opacity-80 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                title="关注的标签"
+              >
+                <Bookmark size={20} style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            )}
+
             {user ? (
               <>
                 <button
@@ -246,6 +260,11 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick }) => {
           // 可以触发页面刷新或回调
         }}
       />
+      
+      {/* Followed Tags Modal */}
+      {showFollowedTags && (
+        <FollowedTags onClose={() => setShowFollowedTags(false)} />
+      )}
     </nav>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Hash } from 'lucide-react';
 import axios from 'axios';
+import TagFollowButton from './TagFollowButton';
 
 const API_URL = '/api';
 
@@ -15,7 +16,8 @@ const TagCloud = ({ onTagClick }) => {
   const fetchPopularTags = async () => {
     try {
       const res = await axios.get(`${API_URL}/tags/popular?limit=15`);
-      setTags(res.data.tags || []);
+      // API 直接返回数组
+      setTags(res.data || []);
     } catch (error) {
       console.error('获取热门标签失败:', error);
     } finally {
@@ -69,14 +71,19 @@ const TagCloud = ({ onTagClick }) => {
       </h3>
       <div className="flex flex-wrap gap-2">
         {tags.map((tag, index) => (
-          <button
+          <div
             key={index}
-            onClick={() => onTagClick && onTagClick(tag.name)}
-            className={`px-3 py-1.5 rounded-full transition-all cursor-pointer ${getTagSize(tag.count, maxCount)} ${getTagColor(tag.count, maxCount)}`}
-            title={`${tag.count} 条记忆`}
+            className="flex items-center gap-1"
           >
-            #{tag.name}
-          </button>
+            <button
+              onClick={() => onTagClick && onTagClick(tag.name)}
+              className={`px-3 py-1.5 rounded-full transition-all cursor-pointer ${getTagSize(tag.count, maxCount)} ${getTagColor(tag.count, maxCount)}`}
+              title={`${tag.count} 条记忆`}
+            >
+              #{tag.name}
+            </button>
+            <TagFollowButton tag={tag.name} />
+          </div>
         ))}
       </div>
     </div>
