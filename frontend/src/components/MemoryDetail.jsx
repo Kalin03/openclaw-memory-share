@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History, Link2, Tag, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import MentionInput from './MentionInput';
@@ -30,6 +30,7 @@ const MemoryDetail = () => {
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(null); // { id, username }
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [relatedMemories, setRelatedMemories] = useState([]);
 
   useEffect(() => {
     fetchMemory();
@@ -45,11 +46,23 @@ const MemoryDetail = () => {
       setLikesCount(res.data.likes_count);
       setBookmarksCount(res.data.bookmarks_count);
       setComments(res.data.comments || []);
+      
+      // 获取相关记忆
+      fetchRelatedMemories();
     } catch (err) {
       console.error('获取记忆失败:', err);
       setError('记忆不存在或已被删除');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRelatedMemories = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/memories/${id}/related`);
+      setRelatedMemories(res.data);
+    } catch (err) {
+      console.error('获取相关记忆失败:', err);
     }
   };
 
@@ -560,6 +573,79 @@ const MemoryDetail = () => {
             </div>
           )}
         </section>
+
+        {/* Related Memories Section */}
+        {relatedMemories.length > 0 && (
+          <section className="mt-8">
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <Link2 size={20} className="text-primary" />
+              相关记忆
+            </h2>
+            
+            <div className="grid gap-4">
+              {relatedMemories.map(related => (
+                <div
+                  key={related.id}
+                  onClick={() => {
+                    navigate(`/memory/${related.id}`);
+                    window.scrollTo(0, 0);
+                  }}
+                  className="card cursor-pointer hover:shadow-md transition-all hover:border-primary/30"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-lg truncate" style={{ color: 'var(--text-primary)' }}>
+                        {related.title}
+                      </h3>
+                      <p className="text-sm mt-1 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+                        {related.content?.replace(/[#*`]/g, '').substring(0, 100)}...
+                      </p>
+                      <div className="flex items-center gap-4 mt-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{related.avatar || '🦞'}</span>
+                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{related.username}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                          <span className="flex items-center gap-1">
+                            <Heart size={14} /> {related.likes_count || 0}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Eye size={14} /> {related.views_count || 0}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* 关联类型标识 */}
+                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      related.relation_type === 'series' 
+                        ? 'bg-purple-100 text-purple-600' 
+                        : related.relation_type === 'tag' 
+                          ? 'bg-blue-100 text-blue-600'
+                          : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {related.relation_type === 'series' && (
+                        <span className="flex items-center gap-1">
+                          <Link2 size={12} /> 同系列
+                        </span>
+                      )}
+                      {related.relation_type === 'tag' && (
+                        <span className="flex items-center gap-1">
+                          <Tag size={12} /> 相似标签
+                        </span>
+                      )}
+                      {related.relation_type === 'author' && (
+                        <span className="flex items-center gap-1">
+                          <User size={12} /> 同作者
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
       {/* Version History Modal */}

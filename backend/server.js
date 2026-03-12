@@ -397,6 +397,100 @@ app.get('/api/memories/:id', optionalAuth, (req, res) => {
   }
 });
 
+// Get related memories (based on tags and same series)
+app.get('/api/memories/:id/related', optionalAuth, (req, res) => {
+  try {
+    const memoryId = req.params.id;
+    
+    // 获取当前记忆
+    const currentMemory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!currentMemory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    const currentTags = currentMemory.tags ? currentMemory.tags.split(',').filter(Boolean) : [];
+    const relatedMemories = [];
+    const addedIds = new Set([memoryId]); // 排除当前记忆
+
+    // 1. 同系列的记忆（优先级最高）
+    const seriesMemories = db.prepare(`
+      SELECT m.*, u.username, u.avatar
+      FROM series_memories sm
+      JOIN memories m ON sm.memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE sm.series_id IN (
+        SELECT series_id FROM series_memories WHERE memory_id = ?
+      )
+      AND m.id != ?
+      AND m.deleted_at IS NULL
+      AND m.visibility = 'public'
+      ORDER BY sm.sort_order ASC
+      LIMIT 3
+    `).all(memoryId, memoryId);
+
+    seriesMemories.forEach(m => {
+      if (!addedIds.has(m.id)) {
+        relatedMemories.push({ ...m, relation_type: 'series' });
+        addedIds.add(m.id);
+      }
+    });
+
+    // 2. 相同标签的记忆（按匹配标签数量排序）
+    if (currentTags.length > 0 && relatedMemories.length < 5) {
+      const tagConditions = currentTags.map(() => 'm.tags LIKE ?').join(' OR ');
+      const tagParams = currentTags.map(tag => `%"${tag}"%`);
+      
+      const tagMemories = db.prepare(`
+        SELECT m.*, u.username, u.avatar,
+          (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        WHERE (${tagConditions})
+        AND m.id NOT IN (${Array.from(addedIds).map(() => '?').join(',')})
+        AND m.deleted_at IS NULL
+        AND m.visibility = 'public'
+        ORDER BY likes_count DESC, m.created_at DESC
+        LIMIT 5
+      `).all(...tagParams, ...Array.from(addedIds));
+
+      tagMemories.forEach(m => {
+        if (!addedIds.has(m.id) && relatedMemories.length < 5) {
+          relatedMemories.push({ ...m, relation_type: 'tag' });
+          addedIds.add(m.id);
+        }
+      });
+    }
+
+    // 3. 同作者的其他记忆（补充）
+    if (relatedMemories.length < 5) {
+      const authorMemories = db.prepare(`
+        SELECT m.*, u.username, u.avatar,
+          (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.user_id = ?
+        AND m.id NOT IN (${Array.from(addedIds).map(() => '?').join(',')})
+        AND m.deleted_at IS NULL
+        AND m.visibility = 'public'
+        ORDER BY likes_count DESC, m.created_at DESC
+        LIMIT 3
+      `).all(currentMemory.user_id, ...Array.from(addedIds));
+
+      authorMemories.forEach(m => {
+        if (!addedIds.has(m.id) && relatedMemories.length < 5) {
+          relatedMemories.push({ ...m, relation_type: 'author' });
+          addedIds.add(m.id);
+        }
+      });
+    }
+
+    res.json(relatedMemories);
+  } catch (error) {
+    console.error('获取相关记忆错误:', error);
+    res.status(500).json({ error: '获取相关记忆失败' });
+  }
+});
+
 // Create memory
 app.post('/api/memories', authMiddleware, (req, res) => {
   const { title, content, tags, visibility } = req.body;
