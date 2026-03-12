@@ -631,6 +631,346 @@ app.delete('/api/memories/:id', authMiddleware, (req, res) => {
   }
 });
 
+// ==================== Batch Operations ====================
+// IMPORTANT: These routes must be before /api/memories/:id/* routes
+
+// Batch delete memories
+app.post('/api/memories/batch/delete', authMiddleware, (req, res) => {
+  const { memoryIds } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供要删除的记忆ID列表' });
+  }
+
+  if (memoryIds.length > 50) {
+    return res.status(400).json({ error: '一次最多删除50条记忆' });
+  }
+
+  try {
+    const deletedAt = new Date().toISOString();
+    const deleteStmt = db.prepare(`
+      UPDATE memories 
+      SET deleted_at = ? 
+      WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+    `);
+
+    let successCount = 0;
+    const failedIds = [];
+
+    for (const memoryId of memoryIds) {
+      const result = deleteStmt.run(deletedAt, memoryId, userId);
+      if (result.changes > 0) {
+        successCount++;
+      } else {
+        failedIds.push(memoryId);
+      }
+    }
+
+    res.json({
+      message: `成功删除 ${successCount} 条记忆`,
+      successCount,
+      failedCount: failedIds.length,
+      failedIds
+    });
+  } catch (error) {
+    console.error('批量删除记忆错误:', error);
+    res.status(500).json({ error: '批量删除失败' });
+  }
+});
+
+// Batch bookmark memories
+app.post('/api/memories/batch/bookmark', authMiddleware, (req, res) => {
+  const { memoryIds } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供要收藏的记忆ID列表' });
+  }
+
+  if (memoryIds.length > 50) {
+    return res.status(400).json({ error: '一次最多收藏50条记忆' });
+  }
+
+  try {
+    let successCount = 0;
+    let alreadyBookmarkedCount = 0;
+    const failedIds = [];
+
+    for (const memoryId of memoryIds) {
+      // Check if memory exists
+      const memory = db.prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+      if (!memory) {
+        failedIds.push(memoryId);
+        continue;
+      }
+
+      // Check if already bookmarked
+      const existing = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND memory_id = ?').get(userId, memoryId);
+      if (existing) {
+        alreadyBookmarkedCount++;
+        continue;
+      }
+
+      // Add bookmark
+      const bookmarkId = uuidv4();
+      db.prepare('INSERT INTO bookmarks (id, user_id, memory_id) VALUES (?, ?, ?)').run(bookmarkId, userId, memoryId);
+      
+      // Update bookmarks count
+      db.prepare('UPDATE memories SET bookmarks_count = bookmarks_count + 1 WHERE id = ?').run(memoryId);
+      
+      successCount++;
+    }
+
+    res.json({
+      message: `成功收藏 ${successCount} 条记忆${alreadyBookmarkedCount > 0 ? `，${alreadyBookmarkedCount} 条已收藏` : ''}`,
+      successCount,
+      alreadyBookmarkedCount,
+      failedCount: failedIds.length,
+      failedIds
+    });
+  } catch (error) {
+    console.error('批量收藏记忆错误:', error);
+    res.status(500).json({ error: '批量收藏失败' });
+  }
+});
+
+// Batch unbookmark memories
+app.post('/api/memories/batch/unbookmark', authMiddleware, (req, res) => {
+  const { memoryIds } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供要取消收藏的记忆ID列表' });
+  }
+
+  if (memoryIds.length > 50) {
+    return res.status(400).json({ error: '一次最多操作50条记忆' });
+  }
+
+  try {
+    let successCount = 0;
+    const failedIds = [];
+
+    for (const memoryId of memoryIds) {
+      const result = db.prepare('DELETE FROM bookmarks WHERE user_id = ? AND memory_id = ?').run(userId, memoryId);
+      if (result.changes > 0) {
+        db.prepare('UPDATE memories SET bookmarks_count = bookmarks_count - 1 WHERE id = ?').run(memoryId);
+        successCount++;
+      } else {
+        failedIds.push(memoryId);
+      }
+    }
+
+    res.json({
+      message: `成功取消收藏 ${successCount} 条记忆`,
+      successCount,
+      failedCount: failedIds.length,
+      failedIds
+    });
+  } catch (error) {
+    console.error('批量取消收藏记忆错误:', error);
+    res.status(500).json({ error: '批量取消收藏失败' });
+  }
+});
+
+// Batch add to series
+app.post('/api/memories/batch/series', authMiddleware, (req, res) => {
+  const { memoryIds, seriesId } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供要添加的记忆ID列表' });
+  }
+
+  if (!seriesId) {
+    return res.status(400).json({ error: '请提供系列ID' });
+  }
+
+  if (memoryIds.length > 50) {
+    return res.status(400).json({ error: '一次最多添加50条记忆' });
+  }
+
+  try {
+    // Check series ownership
+    const series = db.prepare('SELECT * FROM series WHERE id = ?').get(seriesId);
+    if (!series) {
+      return res.status(404).json({ error: '系列不存在' });
+    }
+
+    if (series.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此系列' });
+    }
+
+    let successCount = 0;
+    let alreadyInSeriesCount = 0;
+    const failedIds = [];
+
+    for (const memoryId of memoryIds) {
+      // Check memory ownership
+      const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+      if (!memory || memory.user_id !== userId) {
+        failedIds.push(memoryId);
+        continue;
+      }
+
+      // Check if already in series
+      const existing = db.prepare('SELECT id FROM series_memories WHERE series_id = ? AND memory_id = ?').get(seriesId, memoryId);
+      if (existing) {
+        alreadyInSeriesCount++;
+        continue;
+      }
+
+      // Get max sort order
+      const maxSort = db.prepare('SELECT MAX(sort_order) as max_sort FROM series_memories WHERE series_id = ?').get(seriesId);
+      const sortOrder = (maxSort?.max_sort || 0) + 1;
+
+      const smId = uuidv4();
+      db.prepare('INSERT INTO series_memories (id, series_id, memory_id, sort_order) VALUES (?, ?, ?, ?)').run(smId, seriesId, memoryId, sortOrder);
+      
+      successCount++;
+    }
+
+    // Update series count
+    db.prepare('UPDATE series SET memories_count = (SELECT COUNT(*) FROM series_memories WHERE series_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(seriesId, seriesId);
+
+    res.json({
+      message: `成功添加 ${successCount} 条记忆到系列${alreadyInSeriesCount > 0 ? `，${alreadyInSeriesCount} 条已在系列中` : ''}`,
+      successCount,
+      alreadyInSeriesCount,
+      failedCount: failedIds.length,
+      failedIds
+    });
+  } catch (error) {
+    console.error('批量添加到系列错误:', error);
+    res.status(500).json({ error: '批量添加到系列失败' });
+  }
+});
+
+// Batch add to collection
+app.post('/api/memories/batch/collection', authMiddleware, (req, res) => {
+  const { memoryIds, collectionId } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供要添加的记忆ID列表' });
+  }
+
+  if (!collectionId) {
+    return res.status(400).json({ error: '请提供收藏夹ID' });
+  }
+
+  if (memoryIds.length > 50) {
+    return res.status(400).json({ error: '一次最多添加50条记忆' });
+  }
+
+  try {
+    // Check collection ownership
+    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(collectionId);
+    if (!collection) {
+      return res.status(404).json({ error: '收藏夹不存在' });
+    }
+
+    if (collection.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此收藏夹' });
+    }
+
+    let successCount = 0;
+    let alreadyInCollectionCount = 0;
+    const failedIds = [];
+
+    for (const memoryId of memoryIds) {
+      // Check memory exists
+      const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+      if (!memory) {
+        failedIds.push(memoryId);
+        continue;
+      }
+
+      // Check if already in collection
+      const existing = db.prepare('SELECT id FROM collection_memories WHERE collection_id = ? AND memory_id = ?').get(collectionId, memoryId);
+      if (existing) {
+        alreadyInCollectionCount++;
+        continue;
+      }
+
+      // Get max sort order
+      const maxSort = db.prepare('SELECT MAX(sort_order) as max_sort FROM collection_memories WHERE collection_id = ?').get(collectionId);
+      const sortOrder = (maxSort?.max_sort || 0) + 1;
+
+      const cmId = uuidv4();
+      db.prepare('INSERT INTO collection_memories (id, collection_id, memory_id, user_id, sort_order) VALUES (?, ?, ?, ?, ?)').run(cmId, collectionId, memoryId, userId, sortOrder);
+      
+      successCount++;
+    }
+
+    // Update collection's updated_at
+    db.prepare('UPDATE collections SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(collectionId);
+
+    res.json({
+      message: `成功添加 ${successCount} 条记忆到收藏夹${alreadyInCollectionCount > 0 ? `，${alreadyInCollectionCount} 条已在收藏夹中` : ''}`,
+      successCount,
+      alreadyInCollectionCount,
+      failedCount: failedIds.length,
+      failedIds
+    });
+  } catch (error) {
+    console.error('批量添加到收藏夹错误:', error);
+    res.status(500).json({ error: '批量添加到收藏夹失败' });
+  }
+});
+
+// Batch change visibility
+app.post('/api/memories/batch/visibility', authMiddleware, (req, res) => {
+  const { memoryIds, visibility } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供要修改的记忆ID列表' });
+  }
+
+  if (!['public', 'followers', 'private'].includes(visibility)) {
+    return res.status(400).json({ error: '无效的可见性设置' });
+  }
+
+  if (memoryIds.length > 50) {
+    return res.status(400).json({ error: '一次最多修改50条记忆' });
+  }
+
+  try {
+    const updateStmt = db.prepare(`
+      UPDATE memories 
+      SET visibility = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+    `);
+
+    let successCount = 0;
+    const failedIds = [];
+
+    for (const memoryId of memoryIds) {
+      const result = updateStmt.run(visibility, memoryId, userId);
+      if (result.changes > 0) {
+        successCount++;
+      } else {
+        failedIds.push(memoryId);
+      }
+    }
+
+    const visibilityNames = { public: '公开', followers: '仅关注者', private: '私密' };
+    res.json({
+      message: `成功将 ${successCount} 条记忆设为${visibilityNames[visibility]}`,
+      successCount,
+      failedCount: failedIds.length,
+      failedIds
+    });
+  } catch (error) {
+    console.error('批量修改可见性错误:', error);
+    res.status(500).json({ error: '批量修改可见性失败' });
+  }
+});
+
+// ==================== End Batch Operations ====================
+
 // Toggle like
 app.post('/api/memories/:id/like', authMiddleware, (req, res) => {
   const memoryId = req.params.id;
@@ -2281,343 +2621,6 @@ app.get('/api/memories/:id/collections', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取记忆收藏夹错误:', error);
     res.status(500).json({ error: '获取记忆收藏夹失败' });
-  }
-});
-
-// ==================== Batch Operations ====================
-
-// Batch delete memories
-app.post('/api/memories/batch/delete', authMiddleware, (req, res) => {
-  const { memoryIds } = req.body;
-  const userId = req.user.id;
-
-  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
-    return res.status(400).json({ error: '请提供要删除的记忆ID列表' });
-  }
-
-  if (memoryIds.length > 50) {
-    return res.status(400).json({ error: '一次最多删除50条记忆' });
-  }
-
-  try {
-    const deletedAt = new Date().toISOString();
-    const deleteStmt = db.prepare(`
-      UPDATE memories 
-      SET deleted_at = ? 
-      WHERE id = ? AND user_id = ? AND deleted_at IS NULL
-    `);
-
-    let successCount = 0;
-    const failedIds = [];
-
-    for (const memoryId of memoryIds) {
-      const result = deleteStmt.run(deletedAt, memoryId, userId);
-      if (result.changes > 0) {
-        successCount++;
-      } else {
-        failedIds.push(memoryId);
-      }
-    }
-
-    res.json({
-      message: `成功删除 ${successCount} 条记忆`,
-      successCount,
-      failedCount: failedIds.length,
-      failedIds
-    });
-  } catch (error) {
-    console.error('批量删除记忆错误:', error);
-    res.status(500).json({ error: '批量删除失败' });
-  }
-});
-
-// Batch bookmark memories
-app.post('/api/memories/batch/bookmark', authMiddleware, (req, res) => {
-  const { memoryIds } = req.body;
-  const userId = req.user.id;
-
-  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
-    return res.status(400).json({ error: '请提供要收藏的记忆ID列表' });
-  }
-
-  if (memoryIds.length > 50) {
-    return res.status(400).json({ error: '一次最多收藏50条记忆' });
-  }
-
-  try {
-    let successCount = 0;
-    let alreadyBookmarkedCount = 0;
-    const failedIds = [];
-
-    for (const memoryId of memoryIds) {
-      // Check if memory exists
-      const memory = db.prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
-      if (!memory) {
-        failedIds.push(memoryId);
-        continue;
-      }
-
-      // Check if already bookmarked
-      const existing = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND memory_id = ?').get(userId, memoryId);
-      if (existing) {
-        alreadyBookmarkedCount++;
-        continue;
-      }
-
-      // Add bookmark
-      const bookmarkId = uuidv4();
-      db.prepare('INSERT INTO bookmarks (id, user_id, memory_id) VALUES (?, ?, ?)').run(bookmarkId, userId, memoryId);
-      
-      // Update bookmarks count
-      db.prepare('UPDATE memories SET bookmarks_count = bookmarks_count + 1 WHERE id = ?').run(memoryId);
-      
-      successCount++;
-    }
-
-    res.json({
-      message: `成功收藏 ${successCount} 条记忆${alreadyBookmarkedCount > 0 ? `，${alreadyBookmarkedCount} 条已收藏` : ''}`,
-      successCount,
-      alreadyBookmarkedCount,
-      failedCount: failedIds.length,
-      failedIds
-    });
-  } catch (error) {
-    console.error('批量收藏记忆错误:', error);
-    res.status(500).json({ error: '批量收藏失败' });
-  }
-});
-
-// Batch unbookmark memories
-app.post('/api/memories/batch/unbookmark', authMiddleware, (req, res) => {
-  const { memoryIds } = req.body;
-  const userId = req.user.id;
-
-  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
-    return res.status(400).json({ error: '请提供要取消收藏的记忆ID列表' });
-  }
-
-  if (memoryIds.length > 50) {
-    return res.status(400).json({ error: '一次最多操作50条记忆' });
-  }
-
-  try {
-    let successCount = 0;
-    const failedIds = [];
-
-    for (const memoryId of memoryIds) {
-      const result = db.prepare('DELETE FROM bookmarks WHERE user_id = ? AND memory_id = ?').run(userId, memoryId);
-      if (result.changes > 0) {
-        db.prepare('UPDATE memories SET bookmarks_count = bookmarks_count - 1 WHERE id = ?').run(memoryId);
-        successCount++;
-      } else {
-        failedIds.push(memoryId);
-      }
-    }
-
-    res.json({
-      message: `成功取消收藏 ${successCount} 条记忆`,
-      successCount,
-      failedCount: failedIds.length,
-      failedIds
-    });
-  } catch (error) {
-    console.error('批量取消收藏记忆错误:', error);
-    res.status(500).json({ error: '批量取消收藏失败' });
-  }
-});
-
-// Batch add to series
-app.post('/api/memories/batch/series', authMiddleware, (req, res) => {
-  const { memoryIds, seriesId } = req.body;
-  const userId = req.user.id;
-
-  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
-    return res.status(400).json({ error: '请提供要添加的记忆ID列表' });
-  }
-
-  if (!seriesId) {
-    return res.status(400).json({ error: '请提供系列ID' });
-  }
-
-  if (memoryIds.length > 50) {
-    return res.status(400).json({ error: '一次最多添加50条记忆' });
-  }
-
-  try {
-    // Check series ownership
-    const series = db.prepare('SELECT * FROM series WHERE id = ?').get(seriesId);
-    if (!series) {
-      return res.status(404).json({ error: '系列不存在' });
-    }
-
-    if (series.user_id !== userId) {
-      return res.status(403).json({ error: '无权修改此系列' });
-    }
-
-    let successCount = 0;
-    let alreadyInSeriesCount = 0;
-    const failedIds = [];
-
-    for (const memoryId of memoryIds) {
-      // Check memory ownership
-      const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
-      if (!memory || memory.user_id !== userId) {
-        failedIds.push(memoryId);
-        continue;
-      }
-
-      // Check if already in series
-      const existing = db.prepare('SELECT id FROM series_memories WHERE series_id = ? AND memory_id = ?').get(seriesId, memoryId);
-      if (existing) {
-        alreadyInSeriesCount++;
-        continue;
-      }
-
-      // Get max sort order
-      const maxSort = db.prepare('SELECT MAX(sort_order) as max_sort FROM series_memories WHERE series_id = ?').get(seriesId);
-      const sortOrder = (maxSort?.max_sort || 0) + 1;
-
-      const smId = uuidv4();
-      db.prepare('INSERT INTO series_memories (id, series_id, memory_id, sort_order) VALUES (?, ?, ?, ?)').run(smId, seriesId, memoryId, sortOrder);
-      
-      successCount++;
-    }
-
-    // Update series count
-    db.prepare('UPDATE series SET memories_count = (SELECT COUNT(*) FROM series_memories WHERE series_id = ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(seriesId, seriesId);
-
-    res.json({
-      message: `成功添加 ${successCount} 条记忆到系列${alreadyInSeriesCount > 0 ? `，${alreadyInSeriesCount} 条已在系列中` : ''}`,
-      successCount,
-      alreadyInSeriesCount,
-      failedCount: failedIds.length,
-      failedIds
-    });
-  } catch (error) {
-    console.error('批量添加到系列错误:', error);
-    res.status(500).json({ error: '批量添加到系列失败' });
-  }
-});
-
-// Batch add to collection
-app.post('/api/memories/batch/collection', authMiddleware, (req, res) => {
-  const { memoryIds, collectionId } = req.body;
-  const userId = req.user.id;
-
-  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
-    return res.status(400).json({ error: '请提供要添加的记忆ID列表' });
-  }
-
-  if (!collectionId) {
-    return res.status(400).json({ error: '请提供收藏夹ID' });
-  }
-
-  if (memoryIds.length > 50) {
-    return res.status(400).json({ error: '一次最多添加50条记忆' });
-  }
-
-  try {
-    // Check collection ownership
-    const collection = db.prepare('SELECT * FROM collections WHERE id = ?').get(collectionId);
-    if (!collection) {
-      return res.status(404).json({ error: '收藏夹不存在' });
-    }
-
-    if (collection.user_id !== userId) {
-      return res.status(403).json({ error: '无权修改此收藏夹' });
-    }
-
-    let successCount = 0;
-    let alreadyInCollectionCount = 0;
-    const failedIds = [];
-
-    for (const memoryId of memoryIds) {
-      // Check memory exists
-      const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
-      if (!memory) {
-        failedIds.push(memoryId);
-        continue;
-      }
-
-      // Check if already in collection
-      const existing = db.prepare('SELECT id FROM collection_memories WHERE collection_id = ? AND memory_id = ?').get(collectionId, memoryId);
-      if (existing) {
-        alreadyInCollectionCount++;
-        continue;
-      }
-
-      // Get max sort order
-      const maxSort = db.prepare('SELECT MAX(sort_order) as max_sort FROM collection_memories WHERE collection_id = ?').get(collectionId);
-      const sortOrder = (maxSort?.max_sort || 0) + 1;
-
-      const cmId = uuidv4();
-      db.prepare('INSERT INTO collection_memories (id, collection_id, memory_id, user_id, sort_order) VALUES (?, ?, ?, ?, ?)').run(cmId, collectionId, memoryId, userId, sortOrder);
-      
-      successCount++;
-    }
-
-    // Update collection's updated_at
-    db.prepare('UPDATE collections SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(collectionId);
-
-    res.json({
-      message: `成功添加 ${successCount} 条记忆到收藏夹${alreadyInCollectionCount > 0 ? `，${alreadyInCollectionCount} 条已在收藏夹中` : ''}`,
-      successCount,
-      alreadyInCollectionCount,
-      failedCount: failedIds.length,
-      failedIds
-    });
-  } catch (error) {
-    console.error('批量添加到收藏夹错误:', error);
-    res.status(500).json({ error: '批量添加到收藏夹失败' });
-  }
-});
-
-// Batch change visibility
-app.post('/api/memories/batch/visibility', authMiddleware, (req, res) => {
-  const { memoryIds, visibility } = req.body;
-  const userId = req.user.id;
-
-  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
-    return res.status(400).json({ error: '请提供要修改的记忆ID列表' });
-  }
-
-  if (!['public', 'followers', 'private'].includes(visibility)) {
-    return res.status(400).json({ error: '无效的可见性设置' });
-  }
-
-  if (memoryIds.length > 50) {
-    return res.status(400).json({ error: '一次最多修改50条记忆' });
-  }
-
-  try {
-    const updateStmt = db.prepare(`
-      UPDATE memories 
-      SET visibility = ?, updated_at = CURRENT_TIMESTAMP 
-      WHERE id = ? AND user_id = ? AND deleted_at IS NULL
-    `);
-
-    let successCount = 0;
-    const failedIds = [];
-
-    for (const memoryId of memoryIds) {
-      const result = updateStmt.run(visibility, memoryId, userId);
-      if (result.changes > 0) {
-        successCount++;
-      } else {
-        failedIds.push(memoryId);
-      }
-    }
-
-    const visibilityNames = { public: '公开', followers: '仅关注者', private: '私密' };
-    res.json({
-      message: `成功将 ${successCount} 条记忆设为${visibilityNames[visibility]}`,
-      successCount,
-      failedCount: failedIds.length,
-      failedIds
-    });
-  } catch (error) {
-    console.error('批量修改可见性错误:', error);
-    res.status(500).json({ error: '批量修改可见性失败' });
   }
 });
 
