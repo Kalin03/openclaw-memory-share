@@ -17,6 +17,7 @@ import CheckinLeaderboard from './components/CheckinLeaderboard';
 import HotSeries from './components/HotSeries';
 import BatchOperationsToolbar from './components/BatchOperationsToolbar';
 import Moments from './components/Moments';
+import AdvancedSearchFilter from './components/AdvancedSearchFilter';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -26,7 +27,7 @@ import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckS
 
 const Home = () => {
   const { loading: authLoading, user } = useAuth();
-  const { memories, loading, page, totalPages, searchQuery, isSearchMode, fetchMemories, searchMemories, deleteMemory, fetchHotMemories, fetchFollowingMemories, isFollowingMode } = useMemories();
+  const { memories, loading, page, totalPages, searchQuery, searchFilters, isSearchMode, fetchMemories, searchMemories, resetSearchFilters, deleteMemory, fetchHotMemories, fetchFollowingMemories, isFollowingMode } = useMemories();
   const { showToast } = useToast();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -304,18 +305,39 @@ const Home = () => {
             
             {/* Search Results Header */}
             {isSearchMode && (
-              <div className="mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-                  <Search size={20} />
-                  <span>搜索 "{searchQuery}" 的结果：{memories.length} 条</span>
+              <>
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+                    <Search size={20} />
+                    <span>搜索 "{searchQuery}" 的结果：{memories.length} 条</span>
+                  </div>
+                  <button
+                    onClick={() => navigate('/')}
+                    className="text-primary hover:underline"
+                  >
+                    清除搜索
+                  </button>
                 </div>
-                <button
-                  onClick={() => navigate('/')}
-                  className="text-primary hover:underline"
-                >
-                  清除搜索
-                </button>
-              </div>
+                {/* Advanced Search Filter */}
+                <AdvancedSearchFilter
+                  filters={searchFilters}
+                  onFilterChange={(newFilters) => {
+                    searchMemories(searchQuery, 1, newFilters);
+                  }}
+                  onReset={() => {
+                    resetSearchFilters();
+                    if (searchQuery) {
+                      searchMemories(searchQuery, 1, {
+                        startDate: '',
+                        endDate: '',
+                        tags: '',
+                        author: '',
+                        sort: 'relevance'
+                      });
+                    }
+                  }}
+                />
+              </>
             )}
 
             {loading ? (

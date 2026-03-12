@@ -533,18 +533,54 @@ app.get('/api/memories/search-for-reference', optionalAuth, (req, res) => {
 
 // 搜索记忆 API - 必须在 /api/memories/:id 之前
 app.get('/api/memories/search', optionalAuth, (req, res) => {
-  const { q, page = 1, limit = 10 } = req.query;
+  const { q, page = 1, limit = 10, startDate, endDate, tags, author, sort = 'relevance' } = req.query;
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 10;
   const offset = (pageNum - 1) * limitNum;
 
-  if (!q || q.trim() === '') {
+  // 允许无关键词时使用筛选器搜索
+  const hasKeyword = q && q.trim() !== '';
+  const hasFilters = startDate || endDate || tags || author;
+
+  if (!hasKeyword && !hasFilters) {
     return res.json({ memories: [], pagination: { page: 1, limit: limitNum, total: 0, totalPages: 0 } });
   }
 
-  const searchTerm = `%${q.trim()}%`;
-  const conditions = ['m.deleted_at IS NULL', '(m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?)'];
-  const params = [searchTerm, searchTerm, searchTerm];
+  const conditions = ['m.deleted_at IS NULL'];
+  const params = [];
+
+  // 关键词搜索
+  if (hasKeyword) {
+    const searchTerm = `%${q.trim()}%`;
+    conditions.push('(m.title LIKE ? OR m.content LIKE ? OR m.tags LIKE ?)');
+    params.push(searchTerm, searchTerm, searchTerm);
+  }
+
+  // 时间范围筛选
+  if (startDate) {
+    conditions.push('m.created_at >= ?');
+    params.push(startDate + ' 00:00:00');
+  }
+  if (endDate) {
+    conditions.push('m.created_at <= ?');
+    params.push(endDate + ' 23:59:59');
+  }
+
+  // 标签筛选（支持多标签，逗号分隔）
+  if (tags) {
+    const tagList = tags.split(',').map(t => t.trim()).filter(t => t);
+    if (tagList.length > 0) {
+      const tagConditions = tagList.map(() => 'm.tags LIKE ?');
+      conditions.push(`(${tagConditions.join(' OR ')})`);
+      tagList.forEach(tag => params.push(`%"${tag}"%`));
+    }
+  }
+
+  // 作者筛选
+  if (author) {
+    conditions.push('u.username = ?');
+    params.push(author.trim());
+  }
 
   // 可见性过滤
   if (req.user) {
@@ -555,6 +591,17 @@ app.get('/api/memories/search', optionalAuth, (req, res) => {
   }
 
   const whereClause = ' WHERE ' + conditions.join(' AND ');
+
+  // 排序方式
+  let orderBy = 'm.created_at DESC';
+  if (sort === 'likes') {
+    orderBy = 'likes_count DESC, m.created_at DESC';
+  } else if (sort === 'comments') {
+    orderBy = 'comments_count DESC, m.created_at DESC';
+  } else if (sort === 'oldest') {
+    orderBy = 'm.created_at ASC';
+  }
+  // relevance 默认按创建时间
 
   // 获取总数
   const countSql = `SELECT COUNT(*) as total FROM memories m JOIN users u ON m.user_id = u.id ${whereClause}`;
@@ -571,7 +618,7 @@ app.get('/api/memories/search', optionalAuth, (req, res) => {
     FROM memories m
     JOIN users u ON m.user_id = u.id
     ${whereClause}
-    ORDER BY m.is_pinned DESC, m.created_at DESC
+    ORDER BY m.is_pinned DESC, ${orderBy}
     LIMIT ? OFFSET ?
   `;
   params.push(limitNum, offset);
@@ -585,7 +632,8 @@ app.get('/api/memories/search', optionalAuth, (req, res) => {
         limit: limitNum,
         total,
         totalPages
-      }
+      },
+      filters: { startDate, endDate, tags, author, sort }
     });
   } catch (error) {
     console.error('搜索记忆错误:', error);

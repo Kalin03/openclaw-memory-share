@@ -5,12 +5,21 @@ const API_URL = '/api';
 
 const MemoriesContext = createContext(null);
 
+const defaultFilters = {
+  startDate: '',
+  endDate: '',
+  tags: '',
+  author: '',
+  sort: 'relevance'
+};
+
 export const MemoriesProvider = ({ children }) => {
   const [memories, setMemories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilters, setSearchFilters] = useState(defaultFilters);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [isHotMode, setIsHotMode] = useState(false);
   const [isFollowingMode, setIsFollowingMode] = useState(false);
@@ -26,6 +35,7 @@ export const MemoriesProvider = ({ children }) => {
       setIsHotMode(false);
       setIsFollowingMode(false);
       setSearchQuery('');
+      setSearchFilters(defaultFilters);
     } catch (error) {
       console.error('获取记忆列表失败:', error);
     } finally {
@@ -44,6 +54,7 @@ export const MemoriesProvider = ({ children }) => {
       setIsHotMode(true);
       setIsFollowingMode(false);
       setSearchQuery('');
+      setSearchFilters(defaultFilters);
     } catch (error) {
       console.error('获取热门记忆失败:', error);
     } finally {
@@ -65,6 +76,7 @@ export const MemoriesProvider = ({ children }) => {
       setIsHotMode(false);
       setIsFollowingMode(true);
       setSearchQuery('');
+      setSearchFilters(defaultFilters);
     } catch (error) {
       console.error('获取关注动态失败:', error);
       // 如果未登录或没有关注任何人，显示空列表
@@ -78,18 +90,42 @@ export const MemoriesProvider = ({ children }) => {
     }
   };
 
-  const searchMemories = async (query, pageNum = 1) => {
-    if (!query || query.trim() === '') {
-      fetchMemories(1);
-      return;
-    }
+  const searchMemories = async (query, pageNum = 1, filters = null) => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/memories/search?q=${encodeURIComponent(query)}&page=${pageNum}&limit=10`);
+      const params = new URLSearchParams();
+      if (query && query.trim()) {
+        params.append('q', query.trim());
+      }
+      params.append('page', pageNum);
+      params.append('limit', 10);
+      
+      // 添加筛选参数
+      const activeFilters = filters || searchFilters;
+      if (activeFilters.startDate) {
+        params.append('startDate', activeFilters.startDate);
+      }
+      if (activeFilters.endDate) {
+        params.append('endDate', activeFilters.endDate);
+      }
+      if (activeFilters.tags) {
+        params.append('tags', activeFilters.tags);
+      }
+      if (activeFilters.author) {
+        params.append('author', activeFilters.author);
+      }
+      if (activeFilters.sort && activeFilters.sort !== 'relevance') {
+        params.append('sort', activeFilters.sort);
+      }
+      
+      const res = await axios.get(`${API_URL}/memories/search?${params.toString()}`);
       setMemories(res.data.memories);
       setPage(res.data.pagination.page);
       setTotalPages(res.data.pagination.totalPages);
-      setSearchQuery(query);
+      setSearchQuery(query || '');
+      if (filters) {
+        setSearchFilters(filters);
+      }
       setIsSearchMode(true);
       setIsHotMode(false);
       setIsFollowingMode(false);
@@ -98,6 +134,10 @@ export const MemoriesProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetSearchFilters = () => {
+    setSearchFilters(defaultFilters);
   };
 
   const createMemory = async (data) => {
@@ -161,8 +201,8 @@ export const MemoriesProvider = ({ children }) => {
 
   return (
     <MemoriesContext.Provider value={{
-      memories, loading, page, totalPages, searchQuery, isSearchMode, isHotMode, isFollowingMode,
-      fetchMemories, fetchHotMemories, fetchFollowingMemories, searchMemories, createMemory, updateMemory, deleteMemory, toggleLike, toggleBookmark
+      memories, loading, page, totalPages, searchQuery, searchFilters, isSearchMode, isHotMode, isFollowingMode,
+      fetchMemories, fetchHotMemories, fetchFollowingMemories, searchMemories, resetSearchFilters, createMemory, updateMemory, deleteMemory, toggleLike, toggleBookmark
     }}>
       {children}
     </MemoriesContext.Provider>
