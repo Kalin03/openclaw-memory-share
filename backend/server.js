@@ -221,6 +221,14 @@ db.exec(`
     FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS tag_follows (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, tag)
+  );
 `);
 
 // 添加 deleted_at 字段（回收站功能）
@@ -2621,6 +2629,169 @@ app.get('/api/memories/:id/collections', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取记忆收藏夹错误:', error);
     res.status(500).json({ error: '获取记忆收藏夹失败' });
+  }
+});
+
+// ==================== Tag Follow Routes ====================
+
+// Follow a tag
+app.post('/api/tags/:tag/follow', authMiddleware, (req, res) => {
+  const { tag } = req.params;
+  const userId = req.user.id;
+
+  if (!tag || !tag.trim()) {
+    return res.status(400).json({ error: '标签不能为空' });
+  }
+
+  const normalizedTag = tag.trim().toLowerCase();
+
+  try {
+    // Check if already following
+    const existing = db.prepare('SELECT * FROM tag_follows WHERE user_id = ? AND tag = ?').get(userId, normalizedTag);
+    if (existing) {
+      return res.status(400).json({ error: '已经关注了此标签' });
+    }
+
+    const followId = uuidv4();
+    db.prepare('INSERT INTO tag_follows (id, user_id, tag) VALUES (?, ?, ?)').run(followId, userId, normalizedTag);
+
+    res.json({ message: '关注成功', tag: normalizedTag });
+  } catch (error) {
+    console.error('关注标签错误:', error);
+    res.status(500).json({ error: '关注失败' });
+  }
+});
+
+// Unfollow a tag
+app.delete('/api/tags/:tag/follow', authMiddleware, (req, res) => {
+  const { tag } = req.params;
+  const userId = req.user.id;
+
+  const normalizedTag = tag.trim().toLowerCase();
+
+  try {
+    const result = db.prepare('DELETE FROM tag_follows WHERE user_id = ? AND tag = ?').run(userId, normalizedTag);
+
+    if (result.changes === 0) {
+      return res.status(400).json({ error: '未关注此标签' });
+    }
+
+    res.json({ message: '已取消关注' });
+  } catch (error) {
+    console.error('取消关注标签错误:', error);
+    res.status(500).json({ error: '取消关注失败' });
+  }
+});
+
+// Check if following a tag
+app.get('/api/tags/:tag/following', authMiddleware, (req, res) => {
+  const { tag } = req.params;
+  const userId = req.user.id;
+
+  const normalizedTag = tag.trim().toLowerCase();
+
+  try {
+    const existing = db.prepare('SELECT * FROM tag_follows WHERE user_id = ? AND tag = ?').get(userId, normalizedTag);
+    res.json({ following: !!existing });
+  } catch (error) {
+    console.error('检查标签关注状态错误:', error);
+    res.status(500).json({ error: '检查失败' });
+  }
+});
+
+// Get user's followed tags
+app.get('/api/tags/followed', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const tags = db.prepare(`
+      SELECT tf.tag, tf.created_at,
+        (SELECT COUNT(*) FROM memories WHERE tags LIKE '%' || tf.tag || '%' AND visibility = 'public' AND deleted_at IS NULL) as memories_count
+      FROM tag_follows tf
+      WHERE tf.user_id = ?
+      ORDER BY tf.created_at DESC
+    `).all(userId);
+
+    res.json(tags);
+  } catch (error) {
+    console.error('获取关注标签列表错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Get memories from followed tags
+app.get('/api/tags/followed-memories', optionalAuth, (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+
+  if (!req.user) {
+    return res.status(401).json({ error: '请先登录' });
+  }
+
+  const userId = req.user.id;
+
+  try {
+    // Get followed tags
+    const followedTags = db.prepare('SELECT tag FROM tag_follows WHERE user_id = ?').all(userId);
+
+    if (followedTags.length === 0) {
+      return res.json({
+        memories: [],
+        pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 }
+      });
+    }
+
+    const tags = followedTags.map(t => t.tag);
+
+    // Build query to find memories with any of the followed tags
+    const tagConditions = tags.map(() => "m.tags LIKE '%' || ? || '%'").join(' OR ');
+    const tagParams = tags;
+
+    // Get total count
+    const countSql = `
+      SELECT COUNT(DISTINCT m.id) as total
+      FROM memories m
+      WHERE m.deleted_at IS NULL
+        AND m.visibility = 'public'
+        AND (${tagConditions})
+    `;
+    const countResult = db.prepare(countSql).get(...tagParams);
+    const total = countResult.total;
+    const totalPages = Math.ceil(total / limitNum);
+
+    // Get memories
+    const sql = `
+      SELECT DISTINCT m.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
+        (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.deleted_at IS NULL
+        AND m.visibility = 'public'
+        AND (${tagConditions})
+      ORDER BY m.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const memories = db.prepare(sql).all(...tagParams, limitNum, offset);
+
+    // Add matched tags info
+    const memoriesWithTags = memories.map(memory => {
+      const memoryTags = memory.tags ? memory.tags.split(',').filter(Boolean).map(t => t.trim().toLowerCase()) : [];
+      const matchedTags = memoryTags.filter(t => tags.includes(t));
+      return { ...memory, matched_tags: matchedTags };
+    });
+
+    res.json({
+      memories: memoriesWithTags,
+      pagination: { page: pageNum, limit: limitNum, total, totalPages }
+    });
+  } catch (error) {
+    console.error('获取关注标签记忆错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
 
