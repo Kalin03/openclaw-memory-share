@@ -315,7 +315,11 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 
 // Get all memories
 app.get('/api/memories', optionalAuth, (req, res) => {
-  const { tag, search, userId } = req.query;
+  const { tag, search, userId, page = 1, limit = 10 } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+
   let sql = `
     SELECT m.*, u.username, u.avatar,
       (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
@@ -350,15 +354,29 @@ app.get('/api/memories', optionalAuth, (req, res) => {
     params.push(userId);
   }
 
-  if (conditions.length > 0) {
-    sql += ' WHERE ' + conditions.join(' AND ');
-  }
+  const whereClause = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
 
-  sql += ' ORDER BY m.is_pinned DESC, m.created_at DESC';
+  // 先获取总数
+  const countSql = `SELECT COUNT(*) as total FROM memories m JOIN users u ON m.user_id = u.id ${whereClause}`;
+  const countResult = db.prepare(countSql).get(...params);
+  const total = countResult.total;
+  const totalPages = Math.ceil(total / limitNum);
+
+  // 获取分页数据
+  sql += whereClause + ' ORDER BY m.is_pinned DESC, m.created_at DESC LIMIT ? OFFSET ?';
+  params.push(limitNum, offset);
 
   try {
     const memories = db.prepare(sql).all(...params);
-    res.json(memories);
+    res.json({
+      memories,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages
+      }
+    });
   } catch (error) {
     console.error('获取记忆错误:', error);
     res.status(500).json({ error: '获取记忆失败' });
