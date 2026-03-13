@@ -2010,6 +2010,146 @@ app.get('/api/user/stats', authMiddleware, (req, res) => {
   }
 });
 
+// Get current user's memories
+app.get('/api/user/memories', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const memories = db.prepare(`
+      SELECT m.*, 
+        (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
+        (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count
+      FROM memories m
+      WHERE m.user_id = ? AND m.deleted_at IS NULL
+      ORDER BY m.is_pinned DESC, m.created_at DESC
+    `).all(userId);
+
+    res.json(memories);
+  } catch (error) {
+    console.error('获取用户记忆失败:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Get current user's bookmarks
+app.get('/api/user/bookmarks', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const bookmarks = db.prepare(`
+      SELECT m.*, u.username,
+        (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
+        (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count
+      FROM bookmarks b
+      JOIN memories m ON b.memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE b.user_id = ? AND m.deleted_at IS NULL
+      ORDER BY b.created_at DESC
+    `).all(userId);
+
+    res.json(bookmarks);
+  } catch (error) {
+    console.error('获取用户收藏失败:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Get user follow stats
+app.get('/api/user/follow-stats/:id', (req, res) => {
+  const targetId = req.params.id;
+
+  try {
+    const stats = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM follows WHERE follower_id = ?) as followingCount,
+        (SELECT COUNT(*) FROM follows WHERE following_id = ?) as followersCount
+    `).get(targetId, targetId);
+
+    res.json(stats || { followingCount: 0, followersCount: 0 });
+  } catch (error) {
+    console.error('获取关注统计失败:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Daily check-in (POST)
+app.post('/api/user/checkin', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    // Check if already checked in today
+    const existing = db.prepare('SELECT * FROM sign_ins WHERE user_id = ? AND checkin_date = ?').get(userId, today);
+    if (existing) {
+      return res.status(400).json({ error: '今天已经签到过了', alreadyCheckedIn: true });
+    }
+
+    // Calculate streak
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const lastSignIn = db.prepare('SELECT streak FROM sign_ins WHERE user_id = ? AND checkin_date = ?').get(userId, yesterday);
+
+    const streak = lastSignIn ? lastSignIn.streak + 1 : 1;
+    const signInId = uuidv4();
+
+    db.prepare('INSERT INTO sign_ins (id, user_id, checkin_date, streak) VALUES (?, ?, ?, ?)').run(signInId, userId, today, streak);
+
+    // Get total check-ins
+    const totalCheckins = db.prepare('SELECT COUNT(*) as count FROM sign_ins WHERE user_id = ?').get(userId);
+
+    res.json({
+      message: '签到成功',
+      checkin: {
+        streak,
+        totalCheckins: totalCheckins.count
+      }
+    });
+  } catch (error) {
+    console.error('签到错误:', error);
+    res.status(500).json({ error: '签到失败' });
+  }
+});
+
+// Get check-in status (GET)
+app.get('/api/user/checkin', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    const todaySignIn = db.prepare('SELECT * FROM sign_ins WHERE user_id = ? AND checkin_date = ?').get(userId, today);
+    
+    // Get current streak (from most recent check-in)
+    const lastSignIn = db.prepare('SELECT streak FROM sign_ins WHERE user_id = ? ORDER BY checkin_date DESC LIMIT 1').get(userId);
+    
+    // Get max streak
+    const maxStreakResult = db.prepare('SELECT MAX(streak) as maxStreak FROM sign_ins WHERE user_id = ?').get(userId);
+    
+    // Get total check-ins
+    const totalCheckins = db.prepare('SELECT COUNT(*) as count FROM sign_ins WHERE user_id = ?').get(userId);
+
+    // Check if streak is still valid (consecutive days)
+    let currentStreak = lastSignIn?.streak || 0;
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const yesterdaySignIn = db.prepare('SELECT * FROM sign_ins WHERE user_id = ? AND checkin_date = ?').get(userId, yesterday);
+    
+    // If not signed in today or yesterday, reset streak to 0
+    if (!todaySignIn && !yesterdaySignIn) {
+      currentStreak = 0;
+    }
+
+    res.json({
+      checkedInToday: !!todaySignIn,
+      currentStreak,
+      maxStreak: maxStreakResult?.maxStreak || 0,
+      totalCheckins: totalCheckins.count || 0
+    });
+  } catch (error) {
+    console.error('获取签到状态错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
 // ==================== Analytics Routes ====================
 
 // Get user analytics dashboard data
