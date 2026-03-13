@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell, QrCode } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
@@ -9,6 +9,7 @@ import axios from 'axios';
 import AddToSeriesModal from './AddToSeriesModal';
 import AddToCollectionModal from './AddToCollectionModal';
 import EmbedContent from './EmbedContent';
+import QRShareModal from './QRShareModal';
 
 const API_URL = '/api';
 const BASE_URL = window.location.origin;
@@ -34,6 +35,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
+  const [showQRShare, setShowQRShare] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [showAddToSeries, setShowAddToSeries] = useState(false);
@@ -313,16 +315,12 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
           </button>
           
           <button
-            onClick={handleShare}
-            className={`p-2 rounded-lg transition-colors ${
-              shareCopied 
-                ? 'bg-green-100 text-green-500' 
-                : 'text-gray-500 hover:text-primary'
-            }`}
-            style={!shareCopied ? { backgroundColor: 'var(--bg-tertiary)' } : {}}
-            title="分享链接"
+            onClick={() => setShowQRShare(true)}
+            className="p-2 rounded-lg text-gray-500 hover:text-primary transition-colors"
+            style={{ backgroundColor: 'var(--bg-tertiary)' }}
+            title="二维码分享"
           >
-            {shareCopied ? <Check size={18} /> : <Share2 size={18} />}
+            <QrCode size={18} />
           </button>
           
           {/* Add to Collection Button - only for bookmarked memories */}
@@ -538,6 +536,15 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
           memoryId={memory.id}
           onClose={() => setShowAddToCollection(false)}
           onUpdated={() => {}}
+        />
+      )}
+      
+      {/* QR Share Modal */}
+      {showQRShare && (
+        <QRShareModal
+          memoryId={memory.id}
+          memoryTitle={memory.title}
+          onClose={() => setShowQRShare(false)}
         />
       )}
     </div>
