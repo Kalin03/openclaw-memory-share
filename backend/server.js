@@ -2150,6 +2150,54 @@ app.get('/api/user/checkin', authMiddleware, (req, res) => {
   }
 });
 
+// Get check-in history
+app.get('/api/user/checkin/history', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const days = parseInt(req.query.days) || 30;
+
+  try {
+    const checkins = db.prepare(`
+      SELECT checkin_date, streak 
+      FROM sign_ins 
+      WHERE user_id = ? 
+      ORDER BY checkin_date DESC 
+      LIMIT ?
+    `).all(userId, days);
+
+    res.json({ checkins });
+  } catch (error) {
+    console.error('获取签到历史错误:', error);
+    res.status(500).json({ error: '获取签到历史失败' });
+  }
+});
+
+// Get check-in leaderboard
+app.get('/api/checkin/leaderboard', (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+
+  try {
+    // 获取每个用户最新的签到记录（按连续天数排序）
+    const leaderboard = db.prepare(`
+      SELECT s.user_id, s.streak, s.checkin_date, u.username, u.avatar
+      FROM sign_ins s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id IN (
+        SELECT id FROM sign_ins s2 
+        WHERE s2.user_id = s.user_id 
+        ORDER BY s2.checkin_date DESC 
+        LIMIT 1
+      )
+      ORDER BY s.streak DESC, s.checkin_date DESC
+      LIMIT ?
+    `).all(limit);
+
+    res.json({ leaderboard });
+  } catch (error) {
+    console.error('获取签到排行榜错误:', error);
+    res.status(500).json({ error: '获取签到排行榜失败' });
+  }
+});
+
 // ==================== Analytics Routes ====================
 
 // Get user analytics dashboard data
@@ -3190,7 +3238,7 @@ app.get('/api/user/series', authMiddleware, (req, res) => {
       ORDER BY updated_at DESC
     `).all(userId);
 
-    res.json(series);
+    res.json({ series });
   } catch (error) {
     console.error('获取系列错误:', error);
     res.status(500).json({ error: '获取失败' });
