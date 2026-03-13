@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History, Link2, Tag, User } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History, Link2, Tag, User, Clock, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import MentionInput from './MentionInput';
@@ -415,6 +415,18 @@ const MemoryDetail = () => {
           {/* Text to Speech */}
           <div className="relative mb-6">
             <TextToSpeech text={memory.content} title={memory.title} />
+          </div>
+
+          {/* Reading Stats */}
+          <div className="flex items-center gap-4 mb-6 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            <span className="flex items-center gap-1">
+              <Clock size={14} />
+              {Math.ceil((memory.content?.replace(/<[^>]+>/g, '').replace(/```[\s\S]*?```/g, '').length || 0) / 500)}分钟阅读
+            </span>
+            <span className="flex items-center gap-1">
+              <FileText size={14} />
+              {memory.content?.replace(/<[^>]+>/g, '').replace(/```[\s\S]*?```/g, '').replace(/\s/g, '').length || 0}字
+            </span>
           </div>
 
           {/* Content */}

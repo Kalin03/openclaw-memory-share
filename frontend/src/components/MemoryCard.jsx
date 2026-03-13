@@ -273,7 +273,13 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
           <span className="text-2xl">{memory.avatar || '🦞'}</span>
           <div>
             <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{memory.username}</span>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{formatDate(memory.created_at)}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{formatDate(memory.created_at)}</p>
+              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>·</span>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {Math.ceil((memory.content?.replace(/<[^>]+>/g, '').replace(/```[\s\S]*?```/g, '').length || 0) / 500)}分钟阅读
+              </p>
+            </div>
           </div>
         </div>
         
