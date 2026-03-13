@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users, Pin, BookOpen, Plus } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users, Pin, BookOpen, Plus, BarChart3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
+import AnalyticsDashboard from './AnalyticsDashboard';
 import axios from 'axios';
 import FollowList from './FollowList';
 import CreateSeriesModal from './CreateSeriesModal';
@@ -31,6 +32,7 @@ const UserProfile = ({ onClose }) => {
   const [showFollowList, setShowFollowList] = useState(false);
   const [showCreateSeries, setShowCreateSeries] = useState(false);
   const [editingSeries, setEditingSeries] = useState(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -309,6 +311,13 @@ const UserProfile = ({ onClose }) => {
                 </div>
               </>
             )}
+            <button
+              onClick={() => setShowAnalytics(true)}
+              className="flex items-center gap-2 px-3 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+            >
+              <BarChart3 size={18} />
+              <span className="text-sm font-medium">数据统计</span>
+            </button>
           </div>
         </div>
 
@@ -725,6 +734,11 @@ const UserProfile = ({ onClose }) => {
           }}
           onCreated={handleSeriesCreated}
         />
+      )}
+      
+      {/* Analytics Dashboard */}
+      {showAnalytics && (
+        <AnalyticsDashboard onClose={() => setShowAnalytics(false)} />
       )}
     </div>
   );

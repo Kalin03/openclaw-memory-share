@@ -1806,6 +1806,146 @@ app.get('/api/user/stats', authMiddleware, (req, res) => {
   }
 });
 
+// ==================== Analytics Routes ====================
+
+// Get user analytics dashboard data
+app.get('/api/user/analytics', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { period = 'month' } = req.query;
+
+  try {
+    // 计算时间范围
+    const now = new Date();
+    let startDate;
+    switch (period) {
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'year':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+    const startDateStr = startDate.toISOString().split('T')[0];
+
+    // 1. 记忆创建趋势（按日期分组）
+    const memoryTrend = db.prepare(`
+      SELECT DATE(created_at) as date, COUNT(*) as count
+      FROM memories
+      WHERE user_id = ? AND deleted_at IS NULL AND created_at >= ?
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `).all(userId, startDateStr);
+
+    // 2. 标签使用统计
+    const tagUsage = db.prepare(`
+      SELECT tags FROM memories
+      WHERE user_id = ? AND deleted_at IS NULL AND tags IS NOT NULL AND tags != ''
+    `).all(userId);
+
+    // 解析标签并统计
+    const tagCounts = {};
+    tagUsage.forEach(row => {
+      try {
+        const tags = JSON.parse(row.tags);
+        tags.forEach(tag => {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        });
+      } catch (e) {}
+    });
+    const topTags = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count }));
+
+    // 3. 记忆活跃时段统计（按小时）
+    const hourlyActivity = db.prepare(`
+      SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour, COUNT(*) as count
+      FROM memories
+      WHERE user_id = ? AND deleted_at IS NULL
+      GROUP BY hour
+      ORDER BY hour ASC
+    `).all(userId);
+
+    // 4. 内容统计
+    const contentStats = db.prepare(`
+      SELECT
+        COUNT(*) as total_memories,
+        SUM(CASE WHEN visibility = 'public' THEN 1 ELSE 0 END) as public_count,
+        SUM(CASE WHEN visibility = 'private' THEN 1 ELSE 0 END) as private_count,
+        SUM(views_count) as total_views,
+        AVG(views_count) as avg_views
+      FROM memories
+      WHERE user_id = ? AND deleted_at IS NULL
+    `).get(userId);
+
+    // 5. 互动统计
+    const engagementStats = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM likes WHERE memory_id IN (SELECT id FROM memories WHERE user_id = ?)) as total_likes_received,
+        (SELECT COUNT(*) FROM bookmarks WHERE memory_id IN (SELECT id FROM memories WHERE user_id = ?)) as total_bookmarks_received,
+        (SELECT COUNT(*) FROM comments WHERE memory_id IN (SELECT id FROM memories WHERE user_id = ?)) as total_comments_received
+    `).get(userId, userId, userId);
+
+    // 6. 收藏夹统计
+    const collectionStats = db.prepare(`
+      SELECT COUNT(*) as total_collections
+      FROM collections
+      WHERE user_id = ?
+    `).get(userId);
+
+    // 7. 系列统计
+    const seriesStats = db.prepare(`
+      SELECT COUNT(*) as total_series
+      FROM series
+      WHERE user_id = ?
+    `).get(userId);
+
+    // 8. 本周/本月新增
+    const weeklyNew = db.prepare(`
+      SELECT COUNT(*) as count FROM memories
+      WHERE user_id = ? AND deleted_at IS NULL AND created_at >= datetime('now', '-7 days')
+    `).get(userId);
+
+    const monthlyNew = db.prepare(`
+      SELECT COUNT(*) as count FROM memories
+      WHERE user_id = ? AND deleted_at IS NULL AND created_at >= datetime('now', '-30 days')
+    `).get(userId);
+
+    res.json({
+      period,
+      memoryTrend,
+      topTags,
+      hourlyActivity,
+      contentStats: {
+        total: contentStats.total_memories || 0,
+        public: contentStats.public_count || 0,
+        private: contentStats.private_count || 0,
+        totalViews: contentStats.total_views || 0,
+        avgViews: Math.round(contentStats.avg_views || 0)
+      },
+      engagement: {
+        likesReceived: engagementStats.total_likes_received || 0,
+        bookmarksReceived: engagementStats.total_bookmarks_received || 0,
+        commentsReceived: engagementStats.total_comments_received || 0
+      },
+      collections: collectionStats.total_collections || 0,
+      series: seriesStats.total_series || 0,
+      recentActivity: {
+        weekly: weeklyNew.count || 0,
+        monthly: monthlyNew.count || 0
+      }
+    });
+  } catch (error) {
+    console.error('获取分析数据错误:', error);
+    res.status(500).json({ error: '获取分析数据失败' });
+  }
+});
+
 // ==================== Sign In Routes ====================
 
 // Daily sign in
