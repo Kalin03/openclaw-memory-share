@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import TagManager from './TagManager';
 import axios from 'axios';
 import FollowList from './FollowList';
 import CreateSeriesModal from './CreateSeriesModal';
@@ -33,6 +34,7 @@ const UserProfile = ({ onClose }) => {
   const [showCreateSeries, setShowCreateSeries] = useState(false);
   const [editingSeries, setEditingSeries] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showTagManager, setShowTagManager] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -317,6 +319,13 @@ const UserProfile = ({ onClose }) => {
             >
               <BarChart3 size={18} />
               <span className="text-sm font-medium">数据统计</span>
+            </button>
+            <button
+              onClick={() => setShowTagManager(true)}
+              className="flex items-center gap-2 px-3 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+            >
+              <Tag size={18} />
+              <span className="text-sm font-medium">标签管理</span>
             </button>
           </div>
         </div>
@@ -739,6 +748,11 @@ const UserProfile = ({ onClose }) => {
       {/* Analytics Dashboard */}
       {showAnalytics && (
         <AnalyticsDashboard onClose={() => setShowAnalytics(false)} />
+      )}
+      
+      {/* Tag Manager */}
+      {showTagManager && (
+        <TagManager onClose={() => setShowTagManager(false)} />
       )}
     </div>
   );

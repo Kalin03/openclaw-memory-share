@@ -2925,6 +2925,166 @@ app.get('/api/tags/popular', (req, res) => {
   }
 });
 
+// Get all tags with stats (for management)
+app.get('/api/tags/all', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    // 获取用户的所有标签
+    const memories = db.prepare(`
+      SELECT tags FROM memories 
+      WHERE user_id = ? AND deleted_at IS NULL AND tags IS NOT NULL AND tags != ''
+    `).all(userId);
+    
+    const tagStats = {};
+    memories.forEach(m => {
+      try {
+        const tags = JSON.parse(m.tags);
+        tags.forEach(tag => {
+          if (!tagStats[tag]) {
+            tagStats[tag] = { name: tag, count: 0 };
+          }
+          tagStats[tag].count++;
+        });
+      } catch (e) {
+        // 处理旧格式
+        m.tags.split(',').forEach(tag => {
+          tag = tag.trim();
+          if (tag) {
+            if (!tagStats[tag]) {
+              tagStats[tag] = { name: tag, count: 0 };
+            }
+            tagStats[tag].count++;
+          }
+        });
+      }
+    });
+    
+    const sortedTags = Object.values(tagStats).sort((a, b) => b.count - a.count);
+    res.json({ tags: sortedTags });
+  } catch (error) {
+    console.error('获取标签列表错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Rename a tag
+app.put('/api/tags/:oldName/rename', authMiddleware, (req, res) => {
+  const { oldName } = req.params;
+  const { newName } = req.body;
+  const userId = req.user.id;
+  
+  if (!newName || newName.trim() === '') {
+    return res.status(400).json({ error: '新标签名不能为空' });
+  }
+  
+  try {
+    // 获取用户所有包含该标签的记忆
+    const memories = db.prepare(`
+      SELECT id, tags FROM memories 
+      WHERE user_id = ? AND tags LIKE ?
+    `).all(userId, `%"${oldName}"%`);
+    
+    if (memories.length === 0) {
+      return res.status(404).json({ error: '标签不存在' });
+    }
+    
+    // 更新每个记忆的标签
+    memories.forEach(memory => {
+      try {
+        const tags = JSON.parse(memory.tags);
+        const newTags = tags.map(t => t === oldName ? newName.trim() : t);
+        db.prepare('UPDATE memories SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(JSON.stringify(newTags), memory.id);
+      } catch (e) {
+        // 处理旧格式
+        const tags = memory.tags.split(',').map(t => t.trim());
+        const newTags = tags.map(t => t === oldName ? newName.trim() : t);
+        db.prepare('UPDATE memories SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(JSON.stringify(newTags.filter(t => t)), memory.id);
+      }
+    });
+    
+    res.json({ message: '标签重命名成功', oldName, newName: newName.trim(), affectedCount: memories.length });
+  } catch (error) {
+    console.error('重命名标签错误:', error);
+    res.status(500).json({ error: '重命名失败' });
+  }
+});
+
+// Merge tags
+app.post('/api/tags/merge', authMiddleware, (req, res) => {
+  const { sourceTags, targetTag } = req.body;
+  const userId = req.user.id;
+  
+  if (!sourceTags || !Array.isArray(sourceTags) || sourceTags.length === 0) {
+    return res.status(400).json({ error: '源标签列表不能为空' });
+  }
+  
+  if (!targetTag || targetTag.trim() === '') {
+    return res.status(400).json({ error: '目标标签不能为空' });
+  }
+  
+  try {
+    let affectedCount = 0;
+    
+    sourceTags.forEach(sourceTag => {
+      if (sourceTag === targetTag) return;
+      
+      const memories = db.prepare(`
+        SELECT id, tags FROM memories 
+        WHERE user_id = ? AND tags LIKE ?
+      `).all(userId, `%"${sourceTag}"%`);
+      
+      memories.forEach(memory => {
+        try {
+          const tags = JSON.parse(memory.tags);
+          // 移除源标签，如果目标标签不存在则添加
+          const newTags = tags.filter(t => t !== sourceTag);
+          if (!newTags.includes(targetTag)) {
+            newTags.push(targetTag);
+          }
+          db.prepare('UPDATE memories SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+            .run(JSON.stringify(newTags), memory.id);
+          affectedCount++;
+        } catch (e) {}
+      });
+    });
+    
+    res.json({ message: '标签合并成功', targetTag, affectedCount });
+  } catch (error) {
+    console.error('合并标签错误:', error);
+    res.status(500).json({ error: '合并失败' });
+  }
+});
+
+// Delete a tag from all memories
+app.delete('/api/tags/:tagName', authMiddleware, (req, res) => {
+  const { tagName } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const memories = db.prepare(`
+      SELECT id, tags FROM memories 
+      WHERE user_id = ? AND tags LIKE ?
+    `).all(userId, `%"${tagName}"%`);
+    
+    memories.forEach(memory => {
+      try {
+        const tags = JSON.parse(memory.tags);
+        const newTags = tags.filter(t => t !== tagName);
+        db.prepare('UPDATE memories SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(JSON.stringify(newTags), memory.id);
+      } catch (e) {}
+    });
+    
+    res.json({ message: '标签已删除', tagName, affectedCount: memories.length });
+  } catch (error) {
+    console.error('删除标签错误:', error);
+    res.status(500).json({ error: '删除失败' });
+  }
+});
+
 // ==================== Search & Export Routes ====================
 
 // Search memories
