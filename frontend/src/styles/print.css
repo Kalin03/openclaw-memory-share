@@ -1,0 +1,218 @@
+/* Print styles for Memory-Share */
+@media print {
+  /* Hide non-essential elements */
+  nav,
+  .no-print,
+  button,
+  .btn-primary,
+  .animate-spin,
+  .fixed,
+  aside,
+  footer,
+  .NotificationBell,
+  .CheckinCard,
+  .TagCloud,
+  .BackToTop,
+  .BatchOperationsToolbar,
+  .KeyboardShortcutsHint {
+    display: none !important;
+  }
+
+  /* Reset colors for printing */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+    line-height: 1.5;
+  }
+
+  /* Memory card styles */
+  .memory-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #ddd !important;
+    border-radius: 8px !important;
+    padding: 16px !important;
+    margin-bottom: 16px !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  /* Memory title */
+  .memory-card h3,
+  .memory-detail h1 {
+    color: black !important;
+    font-size: 18pt !important;
+    font-weight: bold !important;
+    margin-bottom: 8px !important;
+  }
+
+  /* Memory content */
+  .memory-card .prose,
+  .memory-detail .prose {
+    color: #333 !important;
+    font-size: 11pt !important;
+  }
+
+  /* Tags */
+  .memory-card .tag,
+  .memory-detail .tag {
+    background: #f0f0f0 !important;
+    color: #666 !important;
+    padding: 2px 8px !important;
+    border-radius: 4px !important;
+    font-size: 10pt !important;
+  }
+
+  /* Links */
+  a {
+    color: #0066cc !important;
+    text-decoration: underline !important;
+  }
+
+  /* Images */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Code blocks */
+  pre, code {
+    background: #f5f5f5 !important;
+    border: 1px solid #ddd !important;
+    border-radius: 4px !important;
+    padding: 8px !important;
+    font-size: 9pt !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* Blockquotes */
+  blockquote {
+    border-left: 3px solid #ccc !important;
+    padding-left: 12px !important;
+    margin-left: 0 !important;
+    color: #555 !important;
+  }
+
+  /* Tables */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+  }
+
+  th {
+    background: #f5f5f5 !important;
+  }
+
+  /* Print header */
+  @page {
+    margin: 1cm;
+    size: A4;
+  }
+
+  /* Page breaks */
+  h1, h2, h3 {
+    break-after: avoid;
+  }
+
+  p, blockquote, pre, table, figure {
+    break-inside: avoid;
+  }
+
+  /* Author info */
+  .memory-author {
+    font-size: 10pt !important;
+    color: #666 !important;
+    margin-bottom: 8px !important;
+  }
+
+  /* Stats */
+  .memory-stats {
+    font-size: 9pt !important;
+    color: #888 !important;
+  }
+
+  /* Series info */
+  .series-info {
+    border: 1px solid #eee !important;
+    padding: 8px !important;
+    margin-top: 16px !important;
+    border-radius: 4px !important;
+  }
+
+  /* Comments section */
+  .comments-section {
+    margin-top: 24px !important;
+    border-top: 1px solid #ddd !important;
+    padding-top: 16px !important;
+  }
+
+  .comment {
+    border-bottom: 1px solid #eee !important;
+    padding: 8px 0 !important;
+  }
+
+  /* Print-only header */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #333;
+  }
+
+  .print-header h1 {
+    font-size: 24pt;
+    margin-bottom: 8px;
+  }
+
+  .print-header .print-date {
+    font-size: 10pt;
+    color: #666;
+  }
+
+  /* QR Code for print */
+  .print-qr {
+    display: block !important;
+    position: fixed;
+    bottom: 1cm;
+    right: 1cm;
+    width: 100px;
+    height: 100px;
+  }
+
+  /* Footer */
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9pt;
+    color: #999;
+    border-top: 1px solid #ddd;
+    padding-top: 4px;
+  }
+}
+
+/* Print button styles (not printed) */
+.print-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.print-button:hover {
+  opacity: 0.9;
+}

@@ -10,6 +10,7 @@ import MemoryReferences from './MemoryReferences';
 import EmbedContent from './EmbedContent';
 import RatingSection from './RatingSection';
 import TextToSpeech from './TextToSpeech';
+import PrintButton from './PrintButton';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -412,9 +413,10 @@ const MemoryDetail = () => {
           {/* Title */}
           <h1 className="text-3xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>{memory.title}</h1>
 
-          {/* Text to Speech */}
-          <div className="relative mb-6">
+          {/* Text to Speech & Print */}
+          <div className="relative mb-6 flex items-center gap-3">
             <TextToSpeech text={memory.content} title={memory.title} />
+            <PrintButton title={memory.title} />
           </div>
 
           {/* Reading Stats */}
