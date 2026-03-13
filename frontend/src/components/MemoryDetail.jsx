@@ -9,6 +9,7 @@ import VersionHistoryModal from './VersionHistoryModal';
 import MemoryReferences from './MemoryReferences';
 import EmbedContent from './EmbedContent';
 import RatingSection from './RatingSection';
+import TextToSpeech from './TextToSpeech';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -409,7 +410,12 @@ const MemoryDetail = () => {
           </div>
 
           {/* Title */}
-          <h1 className="text-3xl font-bold mb-6" style={{ color: 'var(--text-primary)' }}>{memory.title}</h1>
+          <h1 className="text-3xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>{memory.title}</h1>
+
+          {/* Text to Speech */}
+          <div className="relative mb-6">
+            <TextToSpeech text={memory.content} title={memory.title} />
+          </div>
 
           {/* Content */}
           <div className="prose prose-lg max-w-none mb-6" style={{ color: 'var(--text-secondary)' }}>
