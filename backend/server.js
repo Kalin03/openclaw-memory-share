@@ -167,6 +167,25 @@ db.exec(`
     UNIQUE(memory_id, user_id)
   );
 
+  CREATE TABLE IF NOT EXISTS milestones (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    target_date TEXT,
+    status TEXT DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS milestone_memories (
+    id TEXT PRIMARY KEY,
+    milestone_id TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(milestone_id, memory_id)
+  );
+
   CREATE TABLE IF NOT EXISTS series (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -2119,6 +2138,201 @@ app.get('/api/user/analytics', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取分析数据错误:', error);
     res.status(500).json({ error: '获取分析数据失败' });
+  }
+});
+
+// ==================== Milestone Routes ====================
+
+// Create a milestone
+app.post('/api/milestones', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { title, description, targetDate } = req.body;
+  
+  if (!title || title.trim() === '') {
+    return res.status(400).json({ error: '标题不能为空' });
+  }
+  
+  const milestoneId = uuidv4();
+  
+  try {
+    db.prepare(`
+      INSERT INTO milestones (id, user_id, title, description, target_date)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(milestoneId, userId, title.trim(), description || null, targetDate || null);
+    
+    const milestone = db.prepare('SELECT * FROM milestones WHERE id = ?').get(milestoneId);
+    res.json({ message: '里程碑创建成功', milestone });
+  } catch (error) {
+    console.error('创建里程碑错误:', error);
+    res.status(500).json({ error: '创建里程碑失败' });
+  }
+});
+
+// Get user's milestones
+app.get('/api/milestones', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { status } = req.query;
+  
+  try {
+    let sql = `
+      SELECT m.*, 
+        (SELECT COUNT(*) FROM milestone_memories WHERE milestone_id = m.id) as memory_count
+      FROM milestones m
+      WHERE m.user_id = ?
+    `;
+    const params = [userId];
+    
+    if (status) {
+      sql += ' AND m.status = ?';
+      params.push(status);
+    }
+    
+    sql += ' ORDER BY m.created_at DESC';
+    
+    const milestones = db.prepare(sql).all(...params);
+    res.json({ milestones });
+  } catch (error) {
+    console.error('获取里程碑列表错误:', error);
+    res.status(500).json({ error: '获取里程碑列表失败' });
+  }
+});
+
+// Get a single milestone with memories
+app.get('/api/milestones/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const milestone = db.prepare(`
+      SELECT m.*, 
+        (SELECT COUNT(*) FROM milestone_memories WHERE milestone_id = m.id) as memory_count
+      FROM milestones m
+      WHERE m.id = ? AND m.user_id = ?
+    `).get(id, userId);
+    
+    if (!milestone) {
+      return res.status(404).json({ error: '里程碑不存在' });
+    }
+    
+    // Get associated memories
+    const memories = db.prepare(`
+      SELECT mem.id, mem.title, mem.tags, mem.created_at, mm.added_at
+      FROM milestone_memories mm
+      JOIN memories mem ON mm.memory_id = mem.id
+      WHERE mm.milestone_id = ?
+      ORDER BY mm.added_at DESC
+    `).all(id);
+    
+    res.json({ milestone, memories });
+  } catch (error) {
+    console.error('获取里程碑错误:', error);
+    res.status(500).json({ error: '获取里程碑失败' });
+  }
+});
+
+// Update a milestone
+app.put('/api/milestones/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { title, description, targetDate, status } = req.body;
+  
+  try {
+    const existing = db.prepare('SELECT * FROM milestones WHERE id = ? AND user_id = ?').get(id, userId);
+    if (!existing) {
+      return res.status(404).json({ error: '里程碑不存在' });
+    }
+    
+    db.prepare(`
+      UPDATE milestones 
+      SET title = ?, description = ?, target_date = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      title || existing.title,
+      description !== undefined ? description : existing.description,
+      targetDate !== undefined ? targetDate : existing.target_date,
+      status || existing.status,
+      id
+    );
+    
+    const milestone = db.prepare('SELECT * FROM milestones WHERE id = ?').get(id);
+    res.json({ message: '里程碑更新成功', milestone });
+  } catch (error) {
+    console.error('更新里程碑错误:', error);
+    res.status(500).json({ error: '更新里程碑失败' });
+  }
+});
+
+// Delete a milestone
+app.delete('/api/milestones/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const existing = db.prepare('SELECT * FROM milestones WHERE id = ? AND user_id = ?').get(id, userId);
+    if (!existing) {
+      return res.status(404).json({ error: '里程碑不存在' });
+    }
+    
+    // Delete associated memories first
+    db.prepare('DELETE FROM milestone_memories WHERE milestone_id = ?').run(id);
+    db.prepare('DELETE FROM milestones WHERE id = ?').run(id);
+    
+    res.json({ message: '里程碑已删除' });
+  } catch (error) {
+    console.error('删除里程碑错误:', error);
+    res.status(500).json({ error: '删除里程碑失败' });
+  }
+});
+
+// Add memory to milestone
+app.post('/api/milestones/:id/memories', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { memoryId } = req.body;
+  const userId = req.user.id;
+  
+  if (!memoryId) {
+    return res.status(400).json({ error: '记忆ID不能为空' });
+  }
+  
+  try {
+    const milestone = db.prepare('SELECT * FROM milestones WHERE id = ? AND user_id = ?').get(id, userId);
+    if (!milestone) {
+      return res.status(404).json({ error: '里程碑不存在' });
+    }
+    
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+    
+    const linkId = uuidv4();
+    db.prepare(`
+      INSERT OR IGNORE INTO milestone_memories (id, milestone_id, memory_id)
+      VALUES (?, ?, ?)
+    `).run(linkId, id, memoryId);
+    
+    res.json({ message: '已添加到里程碑' });
+  } catch (error) {
+    console.error('添加记忆到里程碑错误:', error);
+    res.status(500).json({ error: '添加失败' });
+  }
+});
+
+// Remove memory from milestone
+app.delete('/api/milestones/:id/memories/:memoryId', authMiddleware, (req, res) => {
+  const { id, memoryId } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    db.prepare(`
+      DELETE FROM milestone_memories 
+      WHERE milestone_id = ? AND memory_id = ?
+    `).run(id, memoryId);
+    
+    res.json({ message: '已从里程碑移除' });
+  } catch (error) {
+    console.error('移除记忆错误:', error);
+    res.status(500).json({ error: '移除失败' });
   }
 });
 

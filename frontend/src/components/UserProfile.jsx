@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users, Pin, BookOpen, Plus, BarChart3 } from 'lucide-react';
+import { X, FileText, Bookmark, Heart, Edit2, Trash2, Check, TrendingUp, Calendar, Tag, MessageCircle, Award, Download, FileJson, Flame, Trophy, Users, Pin, BookOpen, Plus, BarChart3, Flag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import ReactMarkdown from 'react-markdown';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import TagManager from './TagManager';
+import MilestoneManager from './MilestoneManager';
 import axios from 'axios';
 import FollowList from './FollowList';
 import CreateSeriesModal from './CreateSeriesModal';
@@ -35,6 +36,7 @@ const UserProfile = ({ onClose }) => {
   const [editingSeries, setEditingSeries] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showTagManager, setShowTagManager] = useState(false);
+  const [showMilestones, setShowMilestones] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -326,6 +328,13 @@ const UserProfile = ({ onClose }) => {
             >
               <Tag size={18} />
               <span className="text-sm font-medium">标签管理</span>
+            </button>
+            <button
+              onClick={() => setShowMilestones(true)}
+              className="flex items-center gap-2 px-3 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+            >
+              <Flag size={18} />
+              <span className="text-sm font-medium">里程碑</span>
             </button>
           </div>
         </div>
@@ -753,6 +762,11 @@ const UserProfile = ({ onClose }) => {
       {/* Tag Manager */}
       {showTagManager && (
         <TagManager onClose={() => setShowTagManager(false)} />
+      )}
+      
+      {/* Milestone Manager */}
+      {showMilestones && (
+        <MilestoneManager onClose={() => setShowMilestones(false)} />
       )}
     </div>
   );
