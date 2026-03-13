@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History, Link2, Tag, User, Clock, FileText } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History, Link2, Tag, User, Clock, FileText, BarChart2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import MentionInput from './MentionInput';
@@ -11,6 +11,7 @@ import EmbedContent from './EmbedContent';
 import RatingSection from './RatingSection';
 import TextToSpeech from './TextToSpeech';
 import PrintButton from './PrintButton';
+import ContentQualityAnalyzer from './ContentQualityAnalyzer';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -31,6 +32,7 @@ const MemoryDetail = () => {
   const [bookmarksCount, setBookmarksCount] = useState(0);
   const [copied, setCopied] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [showQualityAnalyzer, setShowQualityAnalyzer] = useState(false);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(null); // { id, username }
@@ -417,6 +419,15 @@ const MemoryDetail = () => {
           <div className="relative mb-6 flex items-center gap-3">
             <TextToSpeech text={memory.content} title={memory.title} />
             <PrintButton title={memory.title} />
+            <button
+              onClick={() => setShowQualityAnalyzer(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
+              style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+              title="内容质量分析"
+            >
+              <BarChart2 size={16} />
+              <span className="hidden sm:inline">质量分析</span>
+            </button>
           </div>
 
           {/* Reading Stats */}
@@ -688,6 +699,14 @@ const MemoryDetail = () => {
         isOwner={user?.id === memory?.user_id}
         onRestored={fetchMemory}
       />
+
+      {/* Content Quality Analyzer */}
+      {showQualityAnalyzer && (
+        <ContentQualityAnalyzer
+          memoryId={id}
+          onClose={() => setShowQualityAnalyzer(false)}
+        />
+      )}
     </div>
   );
 };

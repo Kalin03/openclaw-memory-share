@@ -2677,6 +2677,119 @@ app.put('/api/memories/:id/lock-password', authMiddleware, async (req, res) => {
   }
 });
 
+// ==================== Content Analysis Routes ====================
+
+const { analyzeContentQuality, generateSummary, extractKeywords } = require('./utils/contentAnalyzer');
+
+// Analyze content quality
+app.post('/api/memories/analyze', authMiddleware, (req, res) => {
+  const { title, content, tags } = req.body;
+  
+  try {
+    const analysis = analyzeContentQuality(title, content, tags);
+    const summary = generateSummary(content);
+    const keywords = extractKeywords(title, content);
+    
+    res.json({
+      quality: analysis,
+      summary,
+      keywords
+    });
+  } catch (error) {
+    console.error('分析内容错误:', error);
+    res.status(500).json({ error: '分析失败' });
+  }
+});
+
+// Get content quality for existing memory
+app.get('/api/memories/:id/analyze', optionalAuth, (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    const memory = db.prepare(`
+      SELECT m.*, GROUP_CONCAT(DISTINCT t.name) as tag_names
+      FROM memories m
+      LEFT JOIN (
+        SELECT memory_id, json_extract(value, '$.name') as name
+        FROM memories, json_each(tags)
+      ) t ON m.id = t.memory_id
+      WHERE m.id = ? AND m.deleted_at IS NULL
+      GROUP BY m.id
+    `).get(id);
+    
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+    
+    // 检查可见性
+    if (memory.visibility !== 'public') {
+      if (!req.user || req.user.id !== memory.user_id) {
+        return res.status(403).json({ error: '无权访问此记忆' });
+      }
+    }
+    
+    let tags = [];
+    if (memory.tags) {
+      try {
+        tags = JSON.parse(memory.tags);
+      } catch (e) {}
+    }
+    
+    const analysis = analyzeContentQuality(memory.title, memory.content, tags);
+    const summary = generateSummary(memory.content);
+    const keywords = extractKeywords(memory.title, memory.content);
+    
+    res.json({
+      quality: analysis,
+      summary,
+      keywords
+    });
+  } catch (error) {
+    console.error('分析内容错误:', error);
+    res.status(500).json({ error: '分析失败' });
+  }
+});
+
+// Get writing suggestions
+app.get('/api/writing-suggestions', (req, res) => {
+  res.json({
+    suggestions: [
+      {
+        category: '标题优化',
+        tips: [
+          '使用5-50字的描述性标题',
+          '标题应包含关键信息',
+          '避免过于笼统的标题如"笔记"或"记录"'
+        ]
+      },
+      {
+        category: '内容结构',
+        tips: [
+          '使用标题(#)组织内容',
+          '将长内容分成多个段落',
+          '使用列表展示要点'
+        ]
+      },
+      {
+        category: '标签使用',
+        tips: [
+          '添加3-7个相关标签',
+          '使用具体而非笼统的标签',
+          '保持标签命名一致性'
+        ]
+      },
+      {
+        category: '内容丰富',
+        tips: [
+          '添加相关链接',
+          '使用代码块展示代码',
+          '添加图片说明复杂概念'
+        ]
+      }
+    ]
+  });
+});
+
 // ==================== Rating Routes ====================
 
 // Rate a memory
