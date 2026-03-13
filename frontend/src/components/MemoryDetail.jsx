@@ -8,6 +8,7 @@ import MentionInput from './MentionInput';
 import VersionHistoryModal from './VersionHistoryModal';
 import MemoryReferences from './MemoryReferences';
 import EmbedContent from './EmbedContent';
+import RatingSection from './RatingSection';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -578,6 +579,9 @@ const MemoryDetail = () => {
             </div>
           )}
         </section>
+
+        {/* Rating Section */}
+        <RatingSection memoryId={id} />
 
         {/* Memory References Section */}
         <MemoryReferences memoryId={id} />

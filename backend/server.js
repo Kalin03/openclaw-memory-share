@@ -156,6 +156,17 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS ratings (
+    id TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+    review TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(memory_id, user_id)
+  );
+
   CREATE TABLE IF NOT EXISTS series (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -2108,6 +2119,144 @@ app.get('/api/user/analytics', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取分析数据错误:', error);
     res.status(500).json({ error: '获取分析数据失败' });
+  }
+});
+
+// ==================== Rating Routes ====================
+
+// Rate a memory
+app.post('/api/memories/:id/rate', authMiddleware, (req, res) => {
+  const { id: memoryId } = req.params;
+  const userId = req.user.id;
+  const { rating, review } = req.body;
+  
+  if (!rating || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: '评分必须在 1-5 之间' });
+  }
+  
+  try {
+    // 检查记忆是否存在
+    const memory = db.prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+    
+    const ratingId = uuidv4();
+    
+    // Upsert 评分
+    db.prepare(`
+      INSERT INTO ratings (id, memory_id, user_id, rating, review)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(memory_id, user_id) DO UPDATE SET 
+        rating = excluded.rating,
+        review = excluded.review,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(ratingId, memoryId, userId, rating, review || null);
+    
+    // 获取更新后的评分统计
+    const stats = db.prepare(`
+      SELECT 
+        COUNT(*) as total_ratings,
+        AVG(rating) as avg_rating,
+        SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as five_star,
+        SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as four_star,
+        SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as three_star,
+        SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as two_star,
+        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as one_star
+      FROM ratings WHERE memory_id = ?
+    `).get(memoryId);
+    
+    res.json({ 
+      message: '评分成功',
+      rating: parseInt(rating),
+      stats: {
+        ...stats,
+        avg_rating: Math.round(stats.avg_rating * 10) / 10
+      }
+    });
+  } catch (error) {
+    console.error('评分错误:', error);
+    res.status(500).json({ error: '评分失败' });
+  }
+});
+
+// Get memory ratings
+app.get('/api/memories/:id/ratings', optionalAuth, (req, res) => {
+  const { id: memoryId } = req.params;
+  const { page = 1, limit = 10 } = req.query;
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+  
+  try {
+    // 获取评分统计
+    const stats = db.prepare(`
+      SELECT 
+        COUNT(*) as total_ratings,
+        AVG(rating) as avg_rating,
+        SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as five_star,
+        SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as four_star,
+        SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as three_star,
+        SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as two_star,
+        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as one_star
+      FROM ratings WHERE memory_id = ?
+    `).get(memoryId);
+    
+    // 获取评分列表
+    const ratings = db.prepare(`
+      SELECT r.*, u.username, u.avatar
+      FROM ratings r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.memory_id = ?
+      ORDER BY r.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(memoryId, limitNum, offset);
+    
+    // 获取当前用户的评分
+    let userRating = null;
+    if (req.user) {
+      userRating = db.prepare(`
+        SELECT rating, review FROM ratings WHERE memory_id = ? AND user_id = ?
+      `).get(memoryId, req.user.id);
+    }
+    
+    res.json({
+      stats: {
+        ...stats,
+        avg_rating: stats.avg_rating ? Math.round(stats.avg_rating * 10) / 10 : 0
+      },
+      ratings,
+      userRating: userRating ? userRating.rating : null,
+      userReview: userRating ? userRating.review : null,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: stats.total_ratings || 0
+      }
+    });
+  } catch (error) {
+    console.error('获取评分错误:', error);
+    res.status(500).json({ error: '获取评分失败' });
+  }
+});
+
+// Delete rating
+app.delete('/api/memories/:id/rate', authMiddleware, (req, res) => {
+  const { id: memoryId } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const existing = db.prepare('SELECT * FROM ratings WHERE memory_id = ? AND user_id = ?').get(memoryId, userId);
+    if (!existing) {
+      return res.status(404).json({ error: '评分不存在' });
+    }
+    
+    db.prepare('DELETE FROM ratings WHERE memory_id = ? AND user_id = ?').run(memoryId, userId);
+    
+    res.json({ message: '评分已删除' });
+  } catch (error) {
+    console.error('删除评分错误:', error);
+    res.status(500).json({ error: '删除评分失败' });
   }
 });
 
