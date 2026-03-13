@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2, Bookmark, Flame } from 'lucide-react';
+import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2, Bookmark, Flame, Bell } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import TrashModal from './TrashModal';
 import FollowedTags from './FollowedTags';
@@ -9,7 +9,7 @@ import FollowedTags from './FollowedTags';
 const SEARCH_HISTORY_KEY = 'memory-share-search-history';
 const MAX_HISTORY = 10;
 
-const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMomentsClick }) => {
+const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMomentsClick, onRemindersClick }) => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -193,6 +193,18 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMoment
 
             {/* Notification Bell */}
             <NotificationBell user={user} />
+
+            {/* Reminders */}
+            {user && (
+              <button
+                onClick={onRemindersClick}
+                className="p-2 rounded-lg hover:opacity-80 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                title="提醒"
+              >
+                <Bell size={20} style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            )}
 
             {/* Moments (沸点) */}
             <button

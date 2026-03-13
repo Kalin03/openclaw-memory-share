@@ -19,6 +19,7 @@ import BatchOperationsToolbar from './components/BatchOperationsToolbar';
 import Moments from './components/Moments';
 import AdvancedSearchFilter from './components/AdvancedSearchFilter';
 import CalendarView from './components/CalendarView';
+import ReminderManager from './components/ReminderManager';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -35,6 +36,8 @@ const Home = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showMoments, setShowMoments] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showReminders, setShowReminders] = useState(false);
+  const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
   const [searchParams] = useSearchParams();
@@ -217,6 +220,10 @@ const Home = () => {
         onSearch={handleSearch}
         onProfileClick={() => setShowProfileModal(true)}
         onMomentsClick={() => setShowMoments(true)}
+        onRemindersClick={() => {
+          setReminderMemory(null);
+          setShowReminders(true);
+        }}
       />
 
       {/* Hero Section */}
@@ -521,6 +528,18 @@ const Home = () => {
             setShowCalendar(false);
             navigate(`/memory/${memory.id}`);
           }}
+        />
+      )}
+
+      {/* Reminder Manager */}
+      {showReminders && (
+        <ReminderManager 
+          onClose={() => {
+            setShowReminders(false);
+            setReminderMemory(null);
+          }}
+          memoryId={reminderMemory?.id}
+          memoryTitle={reminderMemory?.title}
         />
       )}
     </div>

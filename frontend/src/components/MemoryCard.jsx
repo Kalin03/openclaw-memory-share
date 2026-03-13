@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
@@ -20,7 +20,7 @@ const visibilityConfig = {
   private: { icon: Lock, label: '私密', color: 'text-gray-500' }
 };
 
-const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelectMode = false, isSelected = false, onSelect }) => {
+const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelectMode = false, isSelected = false, onSelect, onSetReminder }) => {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -346,6 +346,14 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
                 title="添加到系列"
               >
                 <BookOpen size={18} />
+              </button>
+              <button
+                onClick={() => onSetReminder && onSetReminder(memory)}
+                className="p-2 rounded-lg text-gray-500 hover:text-yellow-500 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                title="设置提醒"
+              >
+                <Bell size={18} />
               </button>
               <button
                 onClick={() => onEdit && onEdit(memory)}

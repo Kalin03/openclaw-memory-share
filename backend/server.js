@@ -141,6 +141,21 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS reminders (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    memory_id TEXT,
+    title TEXT NOT NULL,
+    content TEXT,
+    reminder_type TEXT DEFAULT 'once',
+    reminder_date TEXT NOT NULL,
+    repeat_interval TEXT,
+    is_completed INTEGER DEFAULT 0,
+    last_triggered TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS series (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -2093,6 +2108,209 @@ app.get('/api/user/analytics', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取分析数据错误:', error);
     res.status(500).json({ error: '获取分析数据失败' });
+  }
+});
+
+// ==================== Reminder Routes ====================
+
+// Create a reminder
+app.post('/api/reminders', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { memoryId, title, content, reminderType, reminderDate, repeatInterval } = req.body;
+  
+  if (!title || !reminderDate) {
+    return res.status(400).json({ error: '标题和提醒时间是必填项' });
+  }
+  
+  const reminderId = uuidv4();
+  
+  try {
+    db.prepare(`
+      INSERT INTO reminders (id, user_id, memory_id, title, content, reminder_type, reminder_date, repeat_interval)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(reminderId, userId, memoryId || null, title, content || null, reminderType || 'once', reminderDate, repeatInterval || null);
+    
+    const reminder = db.prepare('SELECT * FROM reminders WHERE id = ?').get(reminderId);
+    res.json({ message: '提醒创建成功', reminder });
+  } catch (error) {
+    console.error('创建提醒错误:', error);
+    res.status(500).json({ error: '创建提醒失败' });
+  }
+});
+
+// Get user's reminders
+app.get('/api/reminders', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { status = 'all' } = req.query;
+  
+  try {
+    let sql = 'SELECT r.*, m.title as memory_title FROM reminders r LEFT JOIN memories m ON r.memory_id = m.id WHERE r.user_id = ?';
+    const params = [userId];
+    
+    if (status === 'pending') {
+      sql += ' AND r.is_completed = 0 AND datetime(r.reminder_date) > datetime("now")';
+    } else if (status === 'overdue') {
+      sql += ' AND r.is_completed = 0 AND datetime(r.reminder_date) <= datetime("now")';
+    } else if (status === 'completed') {
+      sql += ' AND r.is_completed = 1';
+    }
+    
+    sql += ' ORDER BY r.reminder_date ASC';
+    
+    const reminders = db.prepare(sql).all(...params);
+    res.json({ reminders });
+  } catch (error) {
+    console.error('获取提醒列表错误:', error);
+    res.status(500).json({ error: '获取提醒列表失败' });
+  }
+});
+
+// Get a single reminder
+app.get('/api/reminders/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const reminder = db.prepare(`
+      SELECT r.*, m.title as memory_title 
+      FROM reminders r 
+      LEFT JOIN memories m ON r.memory_id = m.id 
+      WHERE r.id = ? AND r.user_id = ?
+    `).get(id, userId);
+    
+    if (!reminder) {
+      return res.status(404).json({ error: '提醒不存在' });
+    }
+    
+    res.json({ reminder });
+  } catch (error) {
+    console.error('获取提醒错误:', error);
+    res.status(500).json({ error: '获取提醒失败' });
+  }
+});
+
+// Update a reminder
+app.put('/api/reminders/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { title, content, reminderType, reminderDate, repeatInterval } = req.body;
+  
+  try {
+    const existing = db.prepare('SELECT * FROM reminders WHERE id = ? AND user_id = ?').get(id, userId);
+    if (!existing) {
+      return res.status(404).json({ error: '提醒不存在' });
+    }
+    
+    db.prepare(`
+      UPDATE reminders 
+      SET title = ?, content = ?, reminder_type = ?, reminder_date = ?, repeat_interval = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      title || existing.title,
+      content !== undefined ? content : existing.content,
+      reminderType || existing.reminder_type,
+      reminderDate || existing.reminder_date,
+      repeatInterval !== undefined ? repeatInterval : existing.repeat_interval,
+      id
+    );
+    
+    const reminder = db.prepare('SELECT * FROM reminders WHERE id = ?').get(id);
+    res.json({ message: '提醒更新成功', reminder });
+  } catch (error) {
+    console.error('更新提醒错误:', error);
+    res.status(500).json({ error: '更新提醒失败' });
+  }
+});
+
+// Complete a reminder
+app.post('/api/reminders/:id/complete', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const reminder = db.prepare('SELECT * FROM reminders WHERE id = ? AND user_id = ?').get(id, userId);
+    if (!reminder) {
+      return res.status(404).json({ error: '提醒不存在' });
+    }
+    
+    if (reminder.reminder_type === 'recurring' && reminder.repeat_interval) {
+      // 对于重复提醒，计算下一次提醒时间
+      const currentDate = new Date(reminder.reminder_date);
+      let nextDate;
+      
+      switch (reminder.repeat_interval) {
+        case 'daily':
+          nextDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
+          break;
+        case 'weekly':
+          nextDate = new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'monthly':
+          nextDate = new Date(currentDate.setMonth(currentDate.getMonth() + 1));
+          break;
+        case 'yearly':
+          nextDate = new Date(currentDate.setFullYear(currentDate.getFullYear() + 1));
+          break;
+        default:
+          nextDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
+      }
+      
+      db.prepare(`
+        UPDATE reminders 
+        SET reminder_date = ?, last_triggered = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(nextDate.toISOString(), id);
+    } else {
+      // 一次性提醒标记为完成
+      db.prepare('UPDATE reminders SET is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(id);
+    }
+    
+    const updated = db.prepare('SELECT * FROM reminders WHERE id = ?').get(id);
+    res.json({ message: '提醒已完成', reminder: updated });
+  } catch (error) {
+    console.error('完成提醒错误:', error);
+    res.status(500).json({ error: '完成提醒失败' });
+  }
+});
+
+// Delete a reminder
+app.delete('/api/reminders/:id', authMiddleware, (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  
+  try {
+    const existing = db.prepare('SELECT * FROM reminders WHERE id = ? AND user_id = ?').get(id, userId);
+    if (!existing) {
+      return res.status(404).json({ error: '提醒不存在' });
+    }
+    
+    db.prepare('DELETE FROM reminders WHERE id = ?').run(id);
+    res.json({ message: '提醒已删除' });
+  } catch (error) {
+    console.error('删除提醒错误:', error);
+    res.status(500).json({ error: '删除提醒失败' });
+  }
+});
+
+// Get due reminders (for notification check)
+app.get('/api/reminders/due', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const dueReminders = db.prepare(`
+      SELECT r.*, m.title as memory_title 
+      FROM reminders r 
+      LEFT JOIN memories m ON r.memory_id = m.id 
+      WHERE r.user_id = ? 
+        AND r.is_completed = 0 
+        AND datetime(r.reminder_date) <= datetime("now", "+5 minutes")
+        AND datetime(r.reminder_date) > datetime(r.last_triggered || "+1 hour", "now")
+    `).all(userId);
+    
+    res.json({ reminders: dueReminders });
+  } catch (error) {
+    console.error('获取到期提醒错误:', error);
+    res.status(500).json({ error: '获取到期提醒失败' });
   }
 });
 
