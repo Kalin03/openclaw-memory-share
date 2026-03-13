@@ -21,6 +21,7 @@ import AdvancedSearchFilter from './components/AdvancedSearchFilter';
 import CalendarView from './components/CalendarView';
 import ReminderManager from './components/ReminderManager';
 import SkipToContent from './components/SkipToContent';
+import OfflineIndicator from './components/OfflineIndicator';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -215,6 +216,7 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-light flex flex-col">
+      <OfflineIndicator />
       <SkipToContent />
       <Navbar
         onAuthClick={() => setShowAuthModal(true)}
