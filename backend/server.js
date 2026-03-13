@@ -337,6 +337,15 @@ try {
   // 字段已存在，忽略错误
 }
 
+// 添加锁定相关字段
+try {
+  db.exec(`ALTER TABLE memories ADD COLUMN is_locked INTEGER DEFAULT 0`);
+  db.exec(`ALTER TABLE memories ADD COLUMN lock_password TEXT DEFAULT NULL`);
+  console.log('✅ Added lock columns to memories table');
+} catch (e) {
+  // 字段已存在，忽略错误
+}
+
 console.log('✅ Database initialized at:', DB_PATH);
 
 // 解析记忆内容中的引用 [[memoryId]] 格式
@@ -2333,6 +2342,150 @@ app.delete('/api/milestones/:id/memories/:memoryId', authMiddleware, (req, res) 
   } catch (error) {
     console.error('移除记忆错误:', error);
     res.status(500).json({ error: '移除失败' });
+  }
+});
+
+// ==================== Memory Lock Routes ====================
+
+// Lock a memory
+app.post('/api/memories/:id/lock', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { password } = req.body;
+  
+  if (!password || password.length < 4) {
+    return res.status(400).json({ error: '密码至少需要4个字符' });
+  }
+  
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(id, userId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+    
+    if (memory.is_locked) {
+      return res.status(400).json({ error: '记忆已锁定' });
+    }
+    
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    db.prepare(`
+      UPDATE memories SET is_locked = 1, lock_password = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(passwordHash, id);
+    
+    res.json({ message: '记忆已锁定' });
+  } catch (error) {
+    console.error('锁定记忆错误:', error);
+    res.status(500).json({ error: '锁定失败' });
+  }
+});
+
+// Unlock a memory
+app.post('/api/memories/:id/unlock', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { password } = req.body;
+  
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(id, userId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+    
+    if (!memory.is_locked) {
+      return res.status(400).json({ error: '记忆未锁定' });
+    }
+    
+    const isValid = await bcrypt.compare(password, memory.lock_password);
+    if (!isValid) {
+      return res.status(401).json({ error: '密码错误' });
+    }
+    
+    db.prepare(`
+      UPDATE memories SET is_locked = 0, lock_password = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(id);
+    
+    res.json({ message: '记忆已解锁' });
+  } catch (error) {
+    console.error('解锁记忆错误:', error);
+    res.status(500).json({ error: '解锁失败' });
+  }
+});
+
+// Verify lock password (for viewing locked memory)
+app.post('/api/memories/:id/verify-lock', async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body;
+  
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(id);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+    
+    if (!memory.is_locked) {
+      return res.json({ verified: true });
+    }
+    
+    const isValid = await bcrypt.compare(password, memory.lock_password);
+    if (!isValid) {
+      return res.status(401).json({ error: '密码错误' });
+    }
+    
+    // 返回记忆内容（不包含锁定密码）
+    res.json({ 
+      verified: true,
+      memory: {
+        id: memory.id,
+        title: memory.title,
+        content: memory.content,
+        tags: memory.tags
+      }
+    });
+  } catch (error) {
+    console.error('验证密码错误:', error);
+    res.status(500).json({ error: '验证失败' });
+  }
+});
+
+// Change lock password
+app.put('/api/memories/:id/lock-password', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  const { oldPassword, newPassword } = req.body;
+  
+  if (!newPassword || newPassword.length < 4) {
+    return res.status(400).json({ error: '新密码至少需要4个字符' });
+  }
+  
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(id, userId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+    
+    if (!memory.is_locked) {
+      return res.status(400).json({ error: '记忆未锁定' });
+    }
+    
+    const isValid = await bcrypt.compare(oldPassword, memory.lock_password);
+    if (!isValid) {
+      return res.status(401).json({ error: '原密码错误' });
+    }
+    
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    
+    db.prepare(`
+      UPDATE memories SET lock_password = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(passwordHash, id);
+    
+    res.json({ message: '密码已更新' });
+  } catch (error) {
+    console.error('更新密码错误:', error);
+    res.status(500).json({ error: '更新失败' });
   }
 });
 

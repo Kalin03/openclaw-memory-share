@@ -10,6 +10,7 @@ import AddToSeriesModal from './AddToSeriesModal';
 import AddToCollectionModal from './AddToCollectionModal';
 import EmbedContent from './EmbedContent';
 import QRShareModal from './QRShareModal';
+import LockMemoryModal from './LockMemoryModal';
 
 const API_URL = '/api';
 const BASE_URL = window.location.origin;
@@ -36,6 +37,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
   const [newComment, setNewComment] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
   const [showQRShare, setShowQRShare] = useState(false);
+  const [showLockModal, setShowLockModal] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [showAddToSeries, setShowAddToSeries] = useState(false);
@@ -323,6 +325,18 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
             <QrCode size={18} />
           </button>
           
+          {/* Lock Button - only for memory owner */}
+          {user?.id === memory.user_id && (
+            <button
+              onClick={() => setShowLockModal(true)}
+              className={`p-2 rounded-lg transition-colors ${memory.is_locked ? 'text-yellow-500' : 'text-gray-500 hover:text-yellow-500'}`}
+              style={{ backgroundColor: 'var(--bg-tertiary)' }}
+              title={memory.is_locked ? '已锁定 - 点击解锁' : '锁定记忆'}
+            >
+              <Lock size={18} />
+            </button>
+          )}
+          
           {/* Add to Collection Button - only for bookmarked memories */}
           {user && isBookmarked && (
             <button
@@ -545,6 +559,21 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
           memoryId={memory.id}
           memoryTitle={memory.title}
           onClose={() => setShowQRShare(false)}
+        />
+      )}
+      
+      {/* Lock Memory Modal */}
+      {showLockModal && (
+        <LockMemoryModal
+          memoryId={memory.id}
+          isLocked={memory.is_locked}
+          onLockChange={(locked) => {
+            // 刷新记忆数据
+            if (locked !== memory.is_locked) {
+              window.location.reload();
+            }
+          }}
+          onClose={() => setShowLockModal(false)}
         />
       )}
     </div>
