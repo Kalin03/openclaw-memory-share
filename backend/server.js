@@ -683,6 +683,156 @@ app.get('/api/memories/hot', (req, res) => {
   }
 });
 
+// Calendar view - get memories by month (must be before /:id)
+app.get('/api/memories/calendar', optionalAuth, (req, res) => {
+  const { year, month, userId: targetUserId } = req.query;
+  
+  const targetYear = parseInt(year) || new Date().getFullYear();
+  const targetMonth = parseInt(month) || (new Date().getMonth() + 1);
+  
+  const startDate = `${targetYear}-${String(targetMonth).padStart(2, '0')}-01`;
+  const endDate = targetMonth === 12 
+    ? `${targetYear + 1}-01-01` 
+    : `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}-01`;
+  
+  try {
+    let sql = `
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as count,
+        GROUP_CONCAT(id) as memory_ids
+      FROM memories
+      WHERE deleted_at IS NULL
+        AND created_at >= ?
+        AND created_at < ?
+    `;
+    const params = [startDate, endDate];
+    
+    if (targetUserId) {
+      sql += ' AND user_id = ?';
+      params.push(targetUserId);
+    }
+    
+    if (req.user) {
+      if (targetUserId && targetUserId !== req.user.id) {
+        sql += " AND visibility = 'public'";
+      }
+    } else {
+      sql += " AND visibility = 'public'";
+    }
+    
+    sql += ' GROUP BY DATE(created_at) ORDER BY date ASC';
+    
+    const dailyStats = db.prepare(sql).all(...params);
+    
+    const calendarData = dailyStats.map(day => {
+      const ids = day.memory_ids.split(',');
+      const previewSql = `
+        SELECT id, title, tags, visibility
+        FROM memories
+        WHERE id IN (${ids.slice(0, 5).map(() => '?').join(',')})
+        ORDER BY created_at ASC
+      `;
+      const previews = db.prepare(previewSql).all(...ids.slice(0, 5));
+      
+      return {
+        date: day.date,
+        count: day.count,
+        previews
+      };
+    });
+    
+    const monthStats = {
+      total: dailyStats.reduce((sum, d) => sum + d.count, 0),
+      activeDays: dailyStats.length,
+      mostActiveDay: dailyStats.length > 0 
+        ? dailyStats.reduce((max, d) => d.count > max.count ? d : max, dailyStats[0])
+        : null
+    };
+    
+    res.json({
+      year: targetYear,
+      month: targetMonth,
+      calendarData,
+      monthStats
+    });
+  } catch (error) {
+    console.error('获取日历数据错误:', error);
+    res.status(500).json({ error: '获取日历数据失败' });
+  }
+});
+
+// Get memories by specific date (must be before /:id)
+app.get('/api/memories/by-date/:date', optionalAuth, (req, res) => {
+  const { date } = req.params;
+  const { userId: targetUserId, page = 1, limit = 10 } = req.query;
+  
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: '日期格式错误，应为 YYYY-MM-DD' });
+  }
+  
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+  
+  try {
+    const conditions = [
+      'm.deleted_at IS NULL',
+      "DATE(m.created_at) = ?"
+    ];
+    const params = [date];
+    
+    if (targetUserId) {
+      conditions.push('m.user_id = ?');
+      params.push(targetUserId);
+    }
+    
+    if (req.user) {
+      if (targetUserId && targetUserId !== req.user.id) {
+        conditions.push("m.visibility = 'public'");
+      }
+    } else {
+      conditions.push("m.visibility = 'public'");
+    }
+    
+    const whereClause = ' WHERE ' + conditions.join(' AND ');
+    
+    const countSql = `SELECT COUNT(*) as total FROM memories m JOIN users u ON m.user_id = u.id ${whereClause}`;
+    const countResult = db.prepare(countSql).get(...params);
+    const total = countResult.total;
+    const totalPages = Math.ceil(total / limitNum);
+    
+    const sql = `
+      SELECT m.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
+        (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      ${whereClause}
+      ORDER BY m.created_at ASC
+      LIMIT ? OFFSET ?
+    `;
+    params.push(limitNum, offset);
+    
+    const memories = db.prepare(sql).all(...params);
+    
+    res.json({
+      date,
+      memories,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages
+      }
+    });
+  } catch (error) {
+    console.error('获取日期记忆错误:', error);
+    res.status(500).json({ error: '获取日期记忆失败' });
+  }
+});
+
 // Get single memory
 app.get('/api/memories/:id', optionalAuth, (req, res) => {
   try {

@@ -18,12 +18,13 @@ import HotSeries from './components/HotSeries';
 import BatchOperationsToolbar from './components/BatchOperationsToolbar';
 import Moments from './components/Moments';
 import AdvancedSearchFilter from './components/AdvancedSearchFilter';
+import CalendarView from './components/CalendarView';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckSquare, Square, Keyboard } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckSquare, Square, Keyboard, Calendar } from 'lucide-react';
 
 const Home = () => {
   const { loading: authLoading, user } = useAuth();
@@ -33,6 +34,7 @@ const Home = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showMoments, setShowMoments] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
   const [searchParams] = useSearchParams();
@@ -431,6 +433,22 @@ const Home = () => {
           <aside className="hidden lg:block w-72 flex-shrink-0">
             <div className="sticky top-24 space-y-6">
               <CheckinCard />
+              
+              {/* Calendar Entry */}
+              <div 
+                className="p-4 rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-shadow"
+                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }}
+                onClick={() => setShowCalendar(true)}
+              >
+                <div className="flex items-center gap-3">
+                  <Calendar size={24} className="text-primary" />
+                  <div>
+                    <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>记忆日历</h3>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>按日期查看记忆</p>
+                  </div>
+                </div>
+              </div>
+              
               <CheckinLeaderboard />
               <HotSeries />
               <TagCloud onTagClick={handleTagClick} />
@@ -492,6 +510,17 @@ const Home = () => {
           onClearSelection={handleClearSelection}
           onComplete={handleBatchComplete}
           userId={user?.id}
+        />
+      )}
+
+      {/* Calendar View */}
+      {showCalendar && (
+        <CalendarView 
+          onClose={() => setShowCalendar(false)}
+          onMemoryClick={(memory) => {
+            setShowCalendar(false);
+            navigate(`/memory/${memory.id}`);
+          }}
         />
       )}
     </div>
