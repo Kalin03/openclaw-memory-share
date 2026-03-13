@@ -5,6 +5,9 @@
 /* Print styles */
 @import './styles/print.css';
 
+/* Accessibility styles */
+@import './styles/accessibility.css';
+
 :root {
   --bg-primary: #ffffff;
   --bg-secondary: #f8fafc;

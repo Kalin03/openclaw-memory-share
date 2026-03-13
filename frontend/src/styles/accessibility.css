@@ -1,0 +1,258 @@
+/* Accessibility styles for Memory-Share */
+
+/* Focus styles for keyboard navigation */
+*:focus {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Skip to main content link */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #3b82f6;
+  color: white;
+  padding: 8px 16px;
+  z-index: 100;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Screen reader only class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Visible on focus for screen reader elements */
+.sr-only:focus,
+.sr-only:active {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .memory-card {
+    border: 2px solid currentColor;
+  }
+
+  button, a {
+    border: 2px solid currentColor;
+  }
+
+  .tag {
+    border: 1px solid currentColor;
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation: none;
+  }
+
+  .transition-colors,
+  .transition-all {
+    transition: none;
+  }
+}
+
+/* Better link visibility */
+a:not([class]) {
+  text-decoration: underline;
+}
+
+/* Button states */
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Required field indicator */
+.required::after {
+  content: " *";
+  color: #ef4444;
+}
+
+/* Error states */
+[aria-invalid="true"] {
+  border-color: #ef4444 !important;
+}
+
+[aria-describedby] {
+  /* Ensure error messages are visible */
+}
+
+/* Loading states */
+[aria-busy="true"] {
+  position: relative;
+}
+
+[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Expanded/collapsed indicators */
+[aria-expanded="false"]::after {
+  content: " ▸";
+}
+
+[aria-expanded="true"]::after {
+  content: " ▾";
+}
+
+/* Current page indicator */
+[aria-current="page"] {
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+/* Tab focus trap */
+.focus-trap:focus {
+  outline: none;
+}
+
+/* Modal backdrop */
+[role="dialog"] {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+
+[role="dialog"]::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Tooltip accessibility */
+[role="tooltip"] {
+  position: absolute;
+  background: #1e293b;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 100;
+}
+
+/* Menu accessibility */
+[role="menu"] {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+[role="menuitem"] {
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+[role="menuitem"]:hover,
+[role="menuitem"]:focus {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Status messages */
+[role="status"],
+[role="alert"] {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+[role="alert"] {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+[role="status"] {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+}
+
+/* Checkbox and radio accessibility */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  accent-color: #3b82f6;
+}
+
+/* Select accessibility */
+select {
+  cursor: pointer;
+}
+
+/* Textarea resize */
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Image alt text fallback */
+img:not([alt]) {
+  border: 2px dashed #ef4444;
+}
+
+/* Print accessibility */
+@media print {
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #666;
+  }
+
+  abbr[title]::after {
+    content: " (" attr(title) ")";
+    font-size: 0.8em;
+  }
+}

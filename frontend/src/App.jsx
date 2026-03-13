@@ -20,6 +20,7 @@ import Moments from './components/Moments';
 import AdvancedSearchFilter from './components/AdvancedSearchFilter';
 import CalendarView from './components/CalendarView';
 import ReminderManager from './components/ReminderManager';
+import SkipToContent from './components/SkipToContent';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -214,6 +215,7 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-light flex flex-col">
+      <SkipToContent />
       <Navbar
         onAuthClick={() => setShowAuthModal(true)}
         onCreateClick={() => setShowCreateModal(true)}
@@ -227,7 +229,7 @@ const Home = () => {
       />
 
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary/10 to-secondary/10 py-12">
+      <div id="main-content" className="bg-gradient-to-r from-primary/10 to-secondary/10 py-12">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-dark mb-3">
             分享你的龙虾记忆 🦞
