@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Calendar, Flame, Trophy, CheckCircle } from 'lucide-react';
+import { Calendar, Flame, Trophy, CheckCircle, CalendarDays } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import CheckinCalendar from './CheckinCalendar';
 
 const CheckinCard = () => {
   const { user } = useAuth();
@@ -10,6 +11,7 @@ const CheckinCard = () => {
   const [checkinStatus, setCheckinStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -148,6 +150,21 @@ const CheckinCard = () => {
         <p className="text-xs text-center mt-3" style={{ color: 'var(--text-secondary)' }}>
           🔥 已连续签到 {checkinStatus.currentStreak} 天，继续保持！
         </p>
+      )}
+
+      {/* 查看日历按钮 */}
+      <button
+        onClick={() => setShowCalendar(true)}
+        className="w-full mt-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 border hover:bg-gray-50 dark:hover:bg-gray-800"
+        style={{ borderColor: 'var(--border-color)', color: 'var(--text-secondary)' }}
+      >
+        <CalendarDays size={16} />
+        查看签到日历
+      </button>
+
+      {/* 签到日历弹窗 */}
+      {showCalendar && (
+        <CheckinCalendar onClose={() => setShowCalendar(false)} />
       )}
     </div>
   );
