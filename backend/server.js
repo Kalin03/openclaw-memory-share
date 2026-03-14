@@ -1141,6 +1141,28 @@ app.post('/api/memories', authMiddleware, (req, res) => {
     // 解析并保存引用关系
     updateMemoryReferences(memoryId, content);
 
+    // 通知关注者有新内容
+    if (visibility === 'public' || !visibility) {
+      const followers = db.prepare('SELECT follower_id FROM follows WHERE following_id = ?').all(userId);
+      if (followers.length > 0) {
+        const author = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+        followers.forEach(follower => {
+          const notificationId = uuidv4();
+          db.prepare(`
+            INSERT INTO notifications (id, user_id, type, title, content, data)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(
+            notificationId,
+            follower.follower_id,
+            'new_memory',
+            `${author?.username || '用户'}发布了新记忆`,
+            title || '新记忆',
+            JSON.stringify({ memoryId, type: 'new_memory' })
+          );
+        });
+      }
+    }
+
     const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
     res.status(201).json(memory);
   } catch (error) {
@@ -1190,6 +1212,26 @@ app.put('/api/memories/:id', authMiddleware, (req, res) => {
 
       // 解析并更新引用关系
       updateMemoryReferences(memoryId, newContent);
+
+      // 通知关注者内容已更新
+      const followers = db.prepare('SELECT follower_id FROM follows WHERE following_id = ?').all(userId);
+      if (followers.length > 0 && memory.visibility === 'public') {
+        const author = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+        followers.forEach(follower => {
+          const notificationId = uuidv4();
+          db.prepare(`
+            INSERT INTO notifications (id, user_id, type, title, content, data)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(
+            notificationId,
+            follower.follower_id,
+            'memory_updated',
+            `${author?.username || '用户'}更新了记忆`,
+            `${memory.title} 已更新`,
+            JSON.stringify({ memoryId, type: 'memory_updated' })
+          );
+        });
+      }
     }
 
     const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
