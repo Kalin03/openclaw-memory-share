@@ -12,6 +12,9 @@ import RatingSection from './RatingSection';
 import TextToSpeech from './TextToSpeech';
 import PrintButton from './PrintButton';
 import ContentQualityAnalyzer from './ContentQualityAnalyzer';
+import QuickActionsBar from './QuickActionsBar';
+import LockMemoryModal from './LockMemoryModal';
+import ReminderManager from './ReminderManager';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -38,6 +41,8 @@ const MemoryDetail = () => {
   const [replyTo, setReplyTo] = useState(null); // { id, username }
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [relatedMemories, setRelatedMemories] = useState([]);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [showLockModal, setShowLockModal] = useState(false);
 
   useEffect(() => {
     fetchMemory();
@@ -185,6 +190,29 @@ const MemoryDetail = () => {
       console.error('删除失败:', err);
       toast.error('删除失败');
     }
+  };
+
+  const handlePin = async () => {
+    if (!user || user.id !== memory.user_id) return;
+    
+    try {
+      const res = await axios.post(`${API_URL}/memories/${id}/pin`);
+      setMemory(prev => ({ ...prev, is_pinned: res.data.pinned }));
+      toast.success(res.data.message);
+    } catch (err) {
+      console.error('置顶操作失败:', err);
+      toast.error('操作失败');
+    }
+  };
+
+  const handleLock = async () => {
+    if (!user || user.id !== memory.user_id) return;
+    setShowLockModal(true);
+  };
+
+  const handleReminder = async () => {
+    if (!user || user.id !== memory.user_id) return;
+    setShowReminderModal(true);
   };
 
   const handleAddComment = async (e) => {
@@ -691,6 +719,28 @@ const MemoryDetail = () => {
         )}
       </main>
 
+      {/* Quick Actions Bar */}
+      {memory && (
+        <QuickActionsBar
+          memory={memory}
+          isOwner={user?.id === memory.user_id}
+          isLiked={isLiked}
+          isBookmarked={isBookmarked}
+          onLike={handleLike}
+          onBookmark={handleBookmark}
+          onEdit={() => navigate(`/?edit=${memory.id}`)}
+          onDelete={handleDelete}
+          onShare={() => {
+            navigator.clipboard.writeText(window.location.href);
+            toast.success('链接已复制');
+          }}
+          onReminder={handleReminder}
+          onLock={handleLock}
+          onPin={handlePin}
+          onPrint={() => window.print()}
+        />
+      )}
+
       {/* Version History Modal */}
       <VersionHistoryModal
         isOpen={showVersionHistory}
@@ -706,6 +756,30 @@ const MemoryDetail = () => {
           memoryId={id}
           onClose={() => setShowQualityAnalyzer(false)}
         />
+      )}
+
+      {/* Lock Memory Modal */}
+      {showLockModal && (
+        <LockMemoryModal
+          memoryId={id}
+          onClose={() => setShowLockModal(false)}
+          onLocked={() => {
+            fetchMemory();
+            setShowLockModal(false);
+          }}
+        />
+      )}
+
+      {/* Reminder Manager */}
+      {showReminderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-lg max-h-[80vh] overflow-auto rounded-lg" style={{ backgroundColor: 'var(--bg-primary)' }}>
+            <ReminderManager
+              memoryId={id}
+              onClose={() => setShowReminderModal(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
