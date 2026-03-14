@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag, Save, Globe, Lock, Users, Layout, Link2 } from 'lucide-react';
+import { X, FileText, Tag, Save, Globe, Lock, Users, Layout, Link2, Sparkles } from 'lucide-react';
 import MemoryTemplates, { memoryTemplates } from './MemoryTemplates';
 import ReferenceInput from './ReferenceInput';
+import { recommendTags } from '../utils/tagRecommender';
 
 const DRAFT_KEY = 'memory-share-draft';
 
@@ -29,6 +30,7 @@ const CreateMemoryModal = ({ onClose }) => {
     tags: '',
     visibility: 'public'
   });
+  const [recommendedTags, setRecommendedTags] = useState([]);
 
   // Load draft on mount
   useEffect(() => {
@@ -63,6 +65,17 @@ const CreateMemoryModal = ({ onClose }) => {
 
     return () => clearTimeout(timer);
   }, [formData]);
+
+  // Update recommended tags
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const existingTags = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
+      const recommendations = recommendTags(formData.content, formData.title, existingTags);
+      setRecommendedTags(recommendations);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [formData.content, formData.title, formData.tags]);
 
   const clearDraft = () => {
     localStorage.removeItem(DRAFT_KEY);
@@ -229,6 +242,35 @@ const CreateMemoryModal = ({ onClose }) => {
               value={formData.tags}
               onChange={(e) => setFormData({...formData, tags: e.target.value})}
             />
+            
+            {/* Recommended Tags */}
+            {recommendedTags.length > 0 && (
+              <div className="mt-2">
+                <div className="flex items-center gap-1 text-xs mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  <Sparkles size={12} />
+                  <span>推荐标签</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {recommendedTags.map(item => (
+                    <button
+                      key={item.tag}
+                      type="button"
+                      onClick={() => {
+                        const currentTags = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
+                        if (!currentTags.includes(item.tag)) {
+                          const newTags = [...currentTags, item.tag].join(', ');
+                          setFormData({...formData, tags: newTags});
+                        }
+                      }}
+                      className="px-2 py-1 rounded-full text-xs transition-all hover:bg-primary/20 hover:text-primary"
+                      style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)' }}
+                    >
+                      {item.tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 可见性选择 */}
