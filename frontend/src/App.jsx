@@ -23,6 +23,7 @@ import ReminderManager from './components/ReminderManager';
 import SkipToContent from './components/SkipToContent';
 import OfflineIndicator from './components/OfflineIndicator';
 import ReadLaterList from './components/ReadLaterList';
+import ArchiveList from './components/ArchiveList';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -41,6 +42,7 @@ const Home = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
   const [showReadLater, setShowReadLater] = useState(false);
+  const [showArchives, setShowArchives] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -231,6 +233,7 @@ const Home = () => {
           setShowReminders(true);
         }}
         onReadLaterClick={() => setShowReadLater(true)}
+        onArchivesClick={() => setShowArchives(true)}
       />
 
       {/* Hero Section */}
@@ -554,6 +557,12 @@ const Home = () => {
       <ReadLaterList 
         isOpen={showReadLater}
         onClose={() => setShowReadLater(false)}
+      />
+
+      {/* Archive List */}
+      <ArchiveList 
+        isOpen={showArchives}
+        onClose={() => setShowArchives(false)}
       />
     </div>
   );

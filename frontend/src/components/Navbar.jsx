@@ -9,7 +9,7 @@ import FollowedTags from './FollowedTags';
 const SEARCH_HISTORY_KEY = 'memory-share-search-history';
 const MAX_HISTORY = 10;
 
-const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMomentsClick, onRemindersClick, onReadLaterClick }) => {
+const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMomentsClick, onRemindersClick, onReadLaterClick, onArchivesClick }) => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -215,6 +215,18 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMoment
                 title="稍后阅读"
               >
                 <Clock size={20} style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            )}
+
+            {/* Archives */}
+            {user && (
+              <button
+                onClick={onArchivesClick}
+                className="p-2 rounded-lg hover:opacity-80 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                title="归档"
+              >
+                <Bookmark size={20} style={{ color: 'var(--text-secondary)' }} />
               </button>
             )}
 

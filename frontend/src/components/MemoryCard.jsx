@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell, QrCode, Clock } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell, QrCode, Clock, Archive } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
@@ -43,6 +43,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
   const [showAddToSeries, setShowAddToSeries] = useState(false);
   const [showAddToCollection, setShowAddToCollection] = useState(false);
   const [isReadLater, setIsReadLater] = useState(false);
+  const [isArchived, setIsArchived] = useState(false);
 
   // 检查关注状态
   useEffect(() => {
@@ -53,7 +54,11 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
     if (user) {
       checkReadLaterStatus();
     }
-  }, [user, memory.user_id]);
+    // 检查归档状态
+    if (memory.archived_at) {
+      setIsArchived(true);
+    }
+  }, [user, memory.user_id, memory.archived_at]);
 
   const checkReadLaterStatus = async () => {
     try {
@@ -81,6 +86,31 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
       }
     } catch (err) {
       console.error('稍后阅读操作失败:', err);
+      toast.error('操作失败');
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!user || user.id !== memory.user_id) {
+      toast.warning('只能归档自己的记忆');
+      return;
+    }
+    try {
+      if (isArchived) {
+        await axios.delete(`${API_URL}/memories/${memory.id}/archive`);
+        setIsArchived(false);
+        toast.success('已取消归档');
+      } else {
+        await axios.post(`${API_URL}/memories/${memory.id}/archive`);
+        setIsArchived(true);
+        toast.success('已归档');
+        // 可选：从列表中移除
+        if (onDelete) {
+          setTimeout(() => onDelete(memory.id), 500);
+        }
+      }
+    } catch (err) {
+      console.error('归档操作失败:', err);
       toast.error('操作失败');
     }
   };
@@ -528,6 +558,18 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
         >
           <Clock size={20} fill={isReadLater ? 'currentColor' : 'none'} />
         </button>
+
+        {user?.id === memory.user_id && (
+          <button
+            onClick={handleArchive}
+            className={`flex items-center gap-1.5 transition-colors ${
+              isArchived ? 'text-primary' : 'text-gray-500 hover:text-primary'
+            }`}
+            title={isArchived ? '取消归档' : '归档'}
+          >
+            <Archive size={20} />
+          </button>
+        )}
 
         <button
           onClick={handleShowComments}

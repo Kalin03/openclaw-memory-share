@@ -356,6 +356,14 @@ try {
   // 字段已存在，忽略错误
 }
 
+// 添加归档字段
+try {
+  db.exec(`ALTER TABLE memories ADD COLUMN archived_at DATETIME DEFAULT NULL`);
+  console.log('✅ Added archived_at column to memories table');
+} catch (e) {
+  // 字段已存在，忽略错误
+}
+
 console.log('✅ Database initialized at:', DB_PATH);
 
 // 解析记忆内容中的引用 [[memoryId]] 格式
@@ -512,7 +520,7 @@ app.get('/api/memories', optionalAuth, (req, res) => {
     FROM memories m
     JOIN users u ON m.user_id = u.id
   `;
-  const conditions = ['m.deleted_at IS NULL'];
+  const conditions = ['m.deleted_at IS NULL', 'm.archived_at IS NULL'];
   const params = [];
 
   // 可见性过滤
@@ -610,7 +618,7 @@ app.get('/api/memories/search', optionalAuth, (req, res) => {
     return res.json({ memories: [], pagination: { page: 1, limit: limitNum, total: 0, totalPages: 0 } });
   }
 
-  const conditions = ['m.deleted_at IS NULL'];
+  const conditions = ['m.deleted_at IS NULL', 'm.archived_at IS NULL'];
   const params = [];
 
   // 关键词搜索
@@ -1724,6 +1732,90 @@ app.delete('/api/read-later', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('清空稍后阅读错误:', error);
     res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// ===== Archive API =====
+
+// Archive a memory
+app.post('/api/memories/:id/archive', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权操作' });
+    }
+
+    db.prepare('UPDATE memories SET archived_at = CURRENT_TIMESTAMP WHERE id = ?').run(memoryId);
+    res.json({ success: true, message: '已归档' });
+  } catch (error) {
+    console.error('归档错误:', error);
+    res.status(500).json({ error: '归档失败' });
+  }
+});
+
+// Unarchive a memory
+app.delete('/api/memories/:id/archive', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权操作' });
+    }
+
+    db.prepare('UPDATE memories SET archived_at = NULL WHERE id = ?').run(memoryId);
+    res.json({ success: true, message: '已取消归档' });
+  } catch (error) {
+    console.error('取消归档错误:', error);
+    res.status(500).json({ error: '取消归档失败' });
+  }
+});
+
+// Get archived memories list
+app.get('/api/archives', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (page - 1) * limit;
+
+  try {
+    const memories = db.prepare(`
+      SELECT m.*, u.username, u.avatar,
+        (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+        (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count,
+        (SELECT COUNT(*) FROM comments WHERE memory_id = m.id) as comments_count
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.user_id = ? AND m.archived_at IS NOT NULL AND m.deleted_at IS NULL
+      ORDER BY m.archived_at DESC
+      LIMIT ? OFFSET ?
+    `).all(userId, limit, offset);
+
+    const total = db.prepare('SELECT COUNT(*) as count FROM memories WHERE user_id = ? AND archived_at IS NOT NULL AND deleted_at IS NULL').get(userId).count;
+
+    res.json({
+      memories,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取归档列表错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
 
