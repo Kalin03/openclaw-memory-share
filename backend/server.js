@@ -318,6 +318,16 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, comment_id)
   );
+
+  CREATE TABLE IF NOT EXISTS read_later (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    priority INTEGER DEFAULT 0,
+    notes TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, memory_id)
+  );
 `);
 
 // Create indexes for memory_references
@@ -1581,6 +1591,138 @@ app.post('/api/memories/:id/bookmark', authMiddleware, (req, res) => {
     }
   } catch (error) {
     console.error('收藏错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// ===== Read Later API =====
+
+// Add to read later
+app.post('/api/memories/:id/read-later', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+  const { priority = 0, notes = '' } = req.body;
+
+  try {
+    const memory = db.prepare('SELECT id FROM memories WHERE id = ?').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    const existing = db.prepare('SELECT * FROM read_later WHERE user_id = ? AND memory_id = ?').get(userId, memoryId);
+
+    if (existing) {
+      db.prepare('UPDATE read_later SET priority = ?, notes = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?').run(priority, notes, existing.id);
+      res.json({ success: true, message: '已更新稍后阅读', isNew: false });
+    } else {
+      const id = uuidv4();
+      db.prepare('INSERT INTO read_later (id, user_id, memory_id, priority, notes) VALUES (?, ?, ?, ?, ?)').run(id, userId, memoryId, priority, notes);
+      res.json({ success: true, message: '已加入稍后阅读', isNew: true });
+    }
+  } catch (error) {
+    console.error('稍后阅读错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// Remove from read later
+app.delete('/api/memories/:id/read-later', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const result = db.prepare('DELETE FROM read_later WHERE user_id = ? AND memory_id = ?').run(userId, memoryId);
+    if (result.changes > 0) {
+      res.json({ success: true, message: '已从稍后阅读移除' });
+    } else {
+      res.status(404).json({ error: '未找到记录' });
+    }
+  } catch (error) {
+    console.error('移除稍后阅读错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// Get read later list
+app.get('/api/read-later', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (page - 1) * limit;
+
+  try {
+    const items = db.prepare(`
+      SELECT rl.id as read_later_id, rl.priority, rl.notes, rl.created_at as added_at,
+        m.id, m.title, m.content, m.tags, m.created_at, m.updated_at, m.likes_count, 
+        m.bookmarks_count, m.views_count, m.comments_count, m.is_pinned,
+        u.username, u.avatar
+      FROM read_later rl
+      JOIN memories m ON rl.memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE rl.user_id = ? AND m.deleted_at IS NULL
+      ORDER BY rl.priority DESC, rl.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(userId, limit, offset);
+
+    const total = db.prepare('SELECT COUNT(*) as count FROM read_later WHERE user_id = ?').get(userId).count;
+
+    res.json({
+      items,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取稍后阅读列表错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Check if memory is in read later
+app.get('/api/memories/:id/read-later', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const item = db.prepare('SELECT * FROM read_later WHERE user_id = ? AND memory_id = ?').get(userId, memoryId);
+    res.json({ inReadLater: !!item, item });
+  } catch (error) {
+    console.error('检查稍后阅读状态错误:', error);
+    res.status(500).json({ error: '查询失败' });
+  }
+});
+
+// Update read later item
+app.put('/api/read-later/:id', authMiddleware, (req, res) => {
+  const readLaterId = req.params.id;
+  const userId = req.user.id;
+  const { priority, notes } = req.body;
+
+  try {
+    const item = db.prepare('SELECT * FROM read_later WHERE id = ? AND user_id = ?').get(readLaterId, userId);
+    if (!item) {
+      return res.status(404).json({ error: '未找到记录' });
+    }
+
+    db.prepare('UPDATE read_later SET priority = COALESCE(?, priority), notes = COALESCE(?, notes) WHERE id = ?').run(priority, notes, readLaterId);
+    res.json({ success: true, message: '更新成功' });
+  } catch (error) {
+    console.error('更新稍后阅读错误:', error);
+    res.status(500).json({ error: '更新失败' });
+  }
+});
+
+// Clear all read later
+app.delete('/api/read-later', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    db.prepare('DELETE FROM read_later WHERE user_id = ?').run(userId);
+    res.json({ success: true, message: '已清空稍后阅读' });
+  } catch (error) {
+    console.error('清空稍后阅读错误:', error);
     res.status(500).json({ error: '操作失败' });
   }
 });

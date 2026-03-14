@@ -22,6 +22,7 @@ import CalendarView from './components/CalendarView';
 import ReminderManager from './components/ReminderManager';
 import SkipToContent from './components/SkipToContent';
 import OfflineIndicator from './components/OfflineIndicator';
+import ReadLaterList from './components/ReadLaterList';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -39,6 +40,7 @@ const Home = () => {
   const [showMoments, setShowMoments] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
+  const [showReadLater, setShowReadLater] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -228,6 +230,7 @@ const Home = () => {
           setReminderMemory(null);
           setShowReminders(true);
         }}
+        onReadLaterClick={() => setShowReadLater(true)}
       />
 
       {/* Hero Section */}
@@ -546,6 +549,12 @@ const Home = () => {
           memoryTitle={reminderMemory?.title}
         />
       )}
+
+      {/* Read Later List */}
+      <ReadLaterList 
+        isOpen={showReadLater}
+        onClose={() => setShowReadLater(false)}
+      />
     </div>
   );
 };

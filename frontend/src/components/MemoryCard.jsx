@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell, QrCode } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell, QrCode, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
@@ -42,13 +42,48 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
   const [followLoading, setFollowLoading] = useState(false);
   const [showAddToSeries, setShowAddToSeries] = useState(false);
   const [showAddToCollection, setShowAddToCollection] = useState(false);
+  const [isReadLater, setIsReadLater] = useState(false);
 
   // 检查关注状态
   useEffect(() => {
     if (user && memory.user_id && user.id !== memory.user_id) {
       checkFollowStatus();
     }
+    // 检查稍后阅读状态
+    if (user) {
+      checkReadLaterStatus();
+    }
   }, [user, memory.user_id]);
+
+  const checkReadLaterStatus = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/memories/${memory.id}/read-later`);
+      setIsReadLater(res.data.inReadLater);
+    } catch (err) {
+      // Ignore
+    }
+  };
+
+  const handleReadLater = async () => {
+    if (!user) {
+      toast.warning('请先登录');
+      return;
+    }
+    try {
+      if (isReadLater) {
+        await axios.delete(`${API_URL}/memories/${memory.id}/read-later`);
+        setIsReadLater(false);
+        toast.success('已从稍后阅读移除');
+      } else {
+        await axios.post(`${API_URL}/memories/${memory.id}/read-later`);
+        setIsReadLater(true);
+        toast.success('已加入稍后阅读');
+      }
+    } catch (err) {
+      console.error('稍后阅读操作失败:', err);
+      toast.error('操作失败');
+    }
+  };
 
   const checkFollowStatus = async () => {
     try {
@@ -482,6 +517,16 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
         >
           <Bookmark size={20} fill={isBookmarked ? 'currentColor' : 'none'} />
           <span className="text-sm font-medium">{bookmarksCount}</span>
+        </button>
+
+        <button
+          onClick={handleReadLater}
+          className={`flex items-center gap-1.5 transition-colors ${
+            isReadLater ? 'text-primary' : 'text-gray-500 hover:text-primary'
+          }`}
+          title={isReadLater ? '从稍后阅读移除' : '加入稍后阅读'}
+        >
+          <Clock size={20} fill={isReadLater ? 'currentColor' : 'none'} />
         </button>
 
         <button
