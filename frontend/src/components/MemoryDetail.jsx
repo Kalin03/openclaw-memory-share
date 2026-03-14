@@ -21,6 +21,7 @@ import TableOfContents from './TableOfContents';
 import CommentReactions from './CommentReactions';
 import SharePoster from './SharePoster';
 import AISummary from './AISummary';
+import ContentStats from './ContentStats';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -461,6 +462,9 @@ const MemoryDetail = () => {
 
           {/* Title */}
           <h1 className="text-3xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>{memory.title}</h1>
+
+          {/* Content Stats */}
+          <ContentStats content={memory.content} title={memory.title} />
 
           {/* Text to Speech & Print */}
           <div className="relative mb-6 flex items-center gap-3">
