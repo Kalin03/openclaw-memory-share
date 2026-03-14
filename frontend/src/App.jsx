@@ -11,6 +11,7 @@ import RandomMemory from './components/RandomMemory';
 import TagCloud from './components/TagCloud';
 import PersonalizedRecommendations from './components/PersonalizedRecommendations';
 import ViewHistory from './components/ViewHistory';
+import MemoryGraph from './components/MemoryGraph';
 import BackToTop from './components/BackToTop';
 import MemoryDetail from './components/MemoryDetail';
 import SeriesDetail from './components/SeriesDetail';
@@ -46,6 +47,7 @@ const Home = () => {
   const [showReadLater, setShowReadLater] = useState(false);
   const [showArchives, setShowArchives] = useState(false);
   const [showViewHistory, setShowViewHistory] = useState(false);
+  const [showMemoryGraph, setShowMemoryGraph] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -238,6 +240,7 @@ const Home = () => {
         onReadLaterClick={() => setShowReadLater(true)}
         onArchivesClick={() => setShowArchives(true)}
         onViewHistoryClick={() => setShowViewHistory(true)}
+        onMemoryGraphClick={() => setShowMemoryGraph(true)}
       />
 
       {/* Hero Section */}
@@ -576,6 +579,12 @@ const Home = () => {
       <ViewHistory 
         isOpen={showViewHistory}
         onClose={() => setShowViewHistory(false)}
+      />
+
+      {/* Memory Graph */}
+      <MemoryGraph 
+        isOpen={showMemoryGraph}
+        onClose={() => setShowMemoryGraph(false)}
       />
     </div>
   );

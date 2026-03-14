@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2, Bookmark, Flame, Bell } from 'lucide-react';
+import { LogOut, User, Plus, Search, X, Sun, Moon, Clock, Trash2, Bookmark, Flame, Bell, Network, History } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import TrashModal from './TrashModal';
 import FollowedTags from './FollowedTags';
@@ -9,7 +9,7 @@ import FollowedTags from './FollowedTags';
 const SEARCH_HISTORY_KEY = 'memory-share-search-history';
 const MAX_HISTORY = 10;
 
-const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMomentsClick, onRemindersClick, onReadLaterClick, onArchivesClick, onViewHistoryClick }) => {
+const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMomentsClick, onRemindersClick, onReadLaterClick, onArchivesClick, onViewHistoryClick, onMemoryGraphClick }) => {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -239,6 +239,18 @@ const Navbar = ({ onAuthClick, onCreateClick, onSearch, onProfileClick, onMoment
                 title="浏览历史"
               >
                 <History size={20} style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            )}
+
+            {/* Memory Graph */}
+            {user && (
+              <button
+                onClick={onMemoryGraphClick}
+                className="p-2 rounded-lg hover:opacity-80 transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                title="记忆图谱"
+              >
+                <Network size={20} style={{ color: 'var(--text-secondary)' }} />
               </button>
             )}
 
