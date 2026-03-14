@@ -18,6 +18,7 @@ import ReminderManager from './ReminderManager';
 import ReadingMode from './ReadingMode';
 import FeedbackButtons from './FeedbackButtons';
 import TableOfContents from './TableOfContents';
+import CommentReactions from './CommentReactions';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -640,6 +641,7 @@ const MemoryDetail = () => {
                           <ThumbsUp size={14} fill={comment.is_liked ? 'currentColor' : 'none'} />
                           <span>{comment.likes_count || 0}</span>
                         </button>
+                        <CommentReactions commentId={comment.id} />
                       </div>
                     </div>
                   </div>

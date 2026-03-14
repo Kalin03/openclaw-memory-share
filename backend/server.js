@@ -226,6 +226,15 @@ db.exec(`
     UNIQUE(user_id, comment_id)
   );
 
+  CREATE TABLE IF NOT EXISTS comment_reactions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    comment_id TEXT NOT NULL,
+    emoji TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, comment_id, emoji)
+  );
+
   CREATE TABLE IF NOT EXISTS memory_versions (
     id TEXT PRIMARY KEY,
     memory_id TEXT NOT NULL,
@@ -2617,6 +2626,88 @@ app.delete('/api/comments/:id/like', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('取消评论点赞错误:', error);
     res.status(500).json({ error: '取消点赞失败' });
+  }
+});
+
+// ===== Comment Reactions API =====
+
+// Add reaction to comment
+app.post('/api/comments/:id/reactions', authMiddleware, (req, res) => {
+  const commentId = req.params.id;
+  const userId = req.user.id;
+  const { emoji } = req.body;
+
+  const allowedEmojis = ['👍', '❤️', '😂', '😮', '😢', '🎉', '🔥', '👏'];
+  if (!emoji || !allowedEmojis.includes(emoji)) {
+    return res.status(400).json({ error: '无效的表情' });
+  }
+
+  try {
+    // 检查评论是否存在
+    const comment = db.prepare('SELECT id FROM comments WHERE id = ?').get(commentId);
+    if (!comment) {
+      return res.status(404).json({ error: '评论不存在' });
+    }
+
+    // 检查是否已反应
+    const existing = db.prepare('SELECT * FROM comment_reactions WHERE user_id = ? AND comment_id = ? AND emoji = ?').get(userId, commentId, emoji);
+
+    if (existing) {
+      // 取消反应
+      db.prepare('DELETE FROM comment_reactions WHERE id = ?').run(existing.id);
+    } else {
+      // 添加反应
+      const id = uuidv4();
+      db.prepare('INSERT INTO comment_reactions (id, user_id, comment_id, emoji) VALUES (?, ?, ?, ?)').run(id, userId, commentId, emoji);
+    }
+
+    // 获取该评论的所有反应统计
+    const reactions = db.prepare(`
+      SELECT emoji, COUNT(*) as count
+      FROM comment_reactions
+      WHERE comment_id = ?
+      GROUP BY emoji
+    `).all(commentId);
+
+    // 获取当前用户的反应
+    const userReactions = db.prepare(`
+      SELECT emoji FROM comment_reactions WHERE user_id = ? AND comment_id = ?
+    `).all(userId, commentId).map(r => r.emoji);
+
+    res.json({
+      reactions: reactions.reduce((acc, r) => {
+        acc[r.emoji] = r.count;
+        return acc;
+      }, {}),
+      userReactions
+    });
+  } catch (error) {
+    console.error('评论反应错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// Get reactions for a comment
+app.get('/api/comments/:id/reactions', (req, res) => {
+  const commentId = req.params.id;
+
+  try {
+    const reactions = db.prepare(`
+      SELECT emoji, COUNT(*) as count
+      FROM comment_reactions
+      WHERE comment_id = ?
+      GROUP BY emoji
+    `).all(commentId);
+
+    res.json({
+      reactions: reactions.reduce((acc, r) => {
+        acc[r.emoji] = r.count;
+        return acc;
+      }, {})
+    });
+  } catch (error) {
+    console.error('获取评论反应错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
 
