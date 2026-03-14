@@ -9,6 +9,7 @@ import EditMemoryModal from './components/EditMemoryModal';
 import UserProfile from './components/UserProfile';
 import RandomMemory from './components/RandomMemory';
 import TagCloud from './components/TagCloud';
+import PersonalizedRecommendations from './components/PersonalizedRecommendations';
 import BackToTop from './components/BackToTop';
 import MemoryDetail from './components/MemoryDetail';
 import SeriesDetail from './components/SeriesDetail';
@@ -256,6 +257,9 @@ const Home = () => {
           <div className="flex-1 min-w-0">
             {/* Random Memory */}
             {!isSearchMode && <RandomMemory onTagClick={handleTagClick} />}
+            
+            {/* Personalized Recommendations */}
+            {!isSearchMode && user && <PersonalizedRecommendations limit={5} />}
             
             {/* Tab Switcher */}
             {!isSearchMode && (

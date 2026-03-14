@@ -1907,6 +1907,129 @@ app.get('/api/archives', authMiddleware, (req, res) => {
   }
 });
 
+// ===== Personalized Recommendations API =====
+
+// Get personalized recommendations for user
+app.get('/api/recommendations', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { limit = 10 } = req.query;
+
+  try {
+    // 基于用户行为的推荐算法：
+    // 1. 用户点赞过的记忆的标签
+    // 2. 用户收藏过的记忆的标签
+    // 3. 用户阅读过的记忆的标签
+    // 4. 用户关注的作者的最新记忆
+    
+    const recommendations = [];
+    const addedIds = new Set();
+
+    // 获取用户喜欢/收藏/阅读的记忆的标签
+    const userInterests = db.prepare(`
+      SELECT DISTINCT tags FROM memories m
+      WHERE m.deleted_at IS NULL AND m.archived_at IS NULL
+      AND (
+        m.id IN (SELECT memory_id FROM likes WHERE user_id = ?)
+        OR m.id IN (SELECT memory_id FROM bookmarks WHERE user_id = ?)
+        OR m.id IN (SELECT memory_id FROM read_later WHERE user_id = ?)
+      )
+    `).all(userId, userId, userId);
+
+    const interestTags = new Set();
+    userInterests.forEach(item => {
+      if (item.tags) {
+        item.tags.split(',').forEach(tag => {
+          if (tag.trim()) interestTags.add(tag.trim());
+        });
+      }
+    });
+
+    // 基于兴趣标签推荐
+    if (interestTags.size > 0) {
+      const tagConditions = Array.from(interestTags).map(() => 'm.tags LIKE ?').join(' OR ');
+      const tagParams = Array.from(interestTags).map(tag => `%${tag}%`);
+      
+      const tagRecommendations = db.prepare(`
+        SELECT m.*, u.username, u.avatar,
+          (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+          (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.deleted_at IS NULL AND m.archived_at IS NULL 
+        AND m.visibility = 'public'
+        AND m.user_id != ?
+        AND (${tagConditions})
+        ORDER BY m.created_at DESC
+        LIMIT ?
+      `).all(userId, ...tagParams, limit);
+
+      tagRecommendations.forEach(m => {
+        if (!addedIds.has(m.id)) {
+          addedIds.add(m.id);
+          recommendations.push({ ...m, reason: 'based_on_interests' });
+        }
+      });
+    }
+
+    // 基于关注的作者推荐
+    if (recommendations.length < limit) {
+      const followingAuthors = db.prepare(`
+        SELECT following_id FROM follows WHERE follower_id = ?
+      `).all(userId);
+
+      if (followingAuthors.length > 0) {
+        const authorIds = followingAuthors.map(f => f.following_id);
+        const placeholders = authorIds.map(() => '?').join(',');
+        
+        const authorRecommendations = db.prepare(`
+          SELECT m.*, u.username, u.avatar,
+            (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+            (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count
+          FROM memories m
+          JOIN users u ON m.user_id = u.id
+          WHERE m.deleted_at IS NULL AND m.archived_at IS NULL
+          AND m.visibility = 'public'
+          AND m.user_id IN (${placeholders})
+          ORDER BY m.created_at DESC
+          LIMIT ?
+        `).all(...authorIds, limit - recommendations.length);
+
+        authorRecommendations.forEach(m => {
+          if (!addedIds.has(m.id)) {
+            addedIds.add(m.id);
+            recommendations.push({ ...m, reason: 'from_following' });
+          }
+        });
+      }
+    }
+
+    // 补充热门记忆
+    if (recommendations.length < limit) {
+      const hotMemories = db.prepare(`
+        SELECT m.*, u.username, u.avatar,
+          (SELECT COUNT(*) FROM likes WHERE memory_id = m.id) as likes_count,
+          (SELECT COUNT(*) FROM bookmarks WHERE memory_id = m.id) as bookmarks_count
+        FROM memories m
+        JOIN users u ON m.user_id = u.id
+        WHERE m.deleted_at IS NULL AND m.archived_at IS NULL
+        AND m.visibility = 'public'
+        AND m.id NOT IN (${addedIds.size > 0 ? Array.from(addedIds).map(() => '?').join(',') : 'NULL'})
+        ORDER BY m.likes_count DESC, m.created_at DESC
+        LIMIT ?
+      `).all(...Array.from(addedIds), limit - recommendations.length);
+
+      hotMemories.forEach(m => {
+        recommendations.push({ ...m, reason: 'trending' });
+      });
+    }
+
+    res.json({ recommendations });
+  } catch (error) {
+    console.error('获取推荐失败:', error);
+    res.status(500).json({ error: '获取推荐失败' });
+  }
+});
+
 // Toggle pin
 app.post('/api/memories/:id/pin', authMiddleware, (req, res) => {
   const memoryId = req.params.id;
