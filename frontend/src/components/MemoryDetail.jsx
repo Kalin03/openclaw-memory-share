@@ -20,6 +20,7 @@ import FeedbackButtons from './FeedbackButtons';
 import TableOfContents from './TableOfContents';
 import CommentReactions from './CommentReactions';
 import SharePoster from './SharePoster';
+import AISummary from './AISummary';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -504,6 +505,11 @@ const MemoryDetail = () => {
 
           {/* Embed Content */}
           <EmbedContent content={memory.content} />
+
+          {/* AI Summary */}
+          <div className="mt-6">
+            <AISummary content={memory.content} title={memory.title} />
+          </div>
 
           {/* Tags */}
           {tags.length > 0 && (
