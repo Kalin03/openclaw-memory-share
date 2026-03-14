@@ -29,6 +29,7 @@ import OfflineIndicator from './components/OfflineIndicator';
 import ReadLaterList from './components/ReadLaterList';
 import ArchiveList from './components/ArchiveList';
 import CommandPalette from './components/CommandPalette';
+import BadgeShowcase from './components/BadgeShowcase';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -51,6 +52,7 @@ const Home = () => {
   const [showViewHistory, setShowViewHistory] = useState(false);
   const [showMemoryGraph, setShowMemoryGraph] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showBadges, setShowBadges] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -187,6 +189,9 @@ const Home = () => {
         break;
       case 'help':
         showToast('帮助中心功能开发中', 'info');
+        break;
+      case 'badges':
+        setShowBadges(true);
         break;
       default:
         break;
@@ -586,6 +591,21 @@ const Home = () => {
             <div className="sticky top-24 space-y-6">
               <CheckinCard />
               
+              {/* Badge Entry */}
+              <div 
+                className="p-4 rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-shadow"
+                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-color)' }}
+                onClick={() => setShowBadges(true)}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🏆</span>
+                  <div>
+                    <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>徽章成就</h3>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>查看你的成就</p>
+                  </div>
+                </div>
+              </div>
+              
               {/* Calendar Entry */}
               <div 
                 className="p-4 rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-shadow"
@@ -655,6 +675,11 @@ const Home = () => {
         onClose={() => setShowCommandPalette(false)}
         onNavigate={handleCommandAction}
       />
+      
+      {/* Badge Showcase */}
+      {showBadges && (
+        <BadgeShowcase onClose={() => setShowBadges(false)} />
+      )}
       
       {/* Keyboard Shortcuts Help Modal */}
       <ShortcutsHelpModal />

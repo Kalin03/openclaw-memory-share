@@ -186,6 +186,26 @@ db.exec(`
     UNIQUE(milestone_id, memory_id)
   );
 
+  CREATE TABLE IF NOT EXISTS badges (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    icon TEXT DEFAULT '🏆',
+    category TEXT DEFAULT 'achievement',
+    requirement_type TEXT NOT NULL,
+    requirement_value INTEGER NOT NULL,
+    points INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS user_badges (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    badge_id TEXT NOT NULL,
+    earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, badge_id)
+  );
+
   CREATE TABLE IF NOT EXISTS series (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -5917,6 +5937,177 @@ app.get('/api/users/:id/moments', (req, res) => {
   } catch (error) {
     console.error('获取用户沸点错误:', error);
     res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// ==================== Badges System ====================
+
+// Initialize default badges
+const initBadges = () => {
+  const defaultBadges = [
+    // 签到类
+    { id: 'checkin-7', name: '坚持一周', description: '连续签到7天', icon: '🔥', category: 'checkin', requirement_type: 'checkin_streak', requirement_value: 7, points: 10 },
+    { id: 'checkin-30', name: '月度达人', description: '连续签到30天', icon: '📅', category: 'checkin', requirement_type: 'checkin_streak', requirement_value: 30, points: 50 },
+    { id: 'checkin-100', name: '百日坚持', description: '连续签到100天', icon: '💯', category: 'checkin', requirement_type: 'checkin_streak', requirement_value: 100, points: 200 },
+    { id: 'checkin-total-10', name: '初心者', description: '累计签到10天', icon: '🌱', category: 'checkin', requirement_type: 'checkin_total', requirement_value: 10, points: 5 },
+    { id: 'checkin-total-50', name: '习惯养成', description: '累计签到50天', icon: '🌿', category: 'checkin', requirement_type: 'checkin_total', requirement_value: 50, points: 25 },
+    { id: 'checkin-total-365', name: '年度纪念', description: '累计签到365天', icon: '🏆', category: 'checkin', requirement_type: 'checkin_total', requirement_value: 365, points: 500 },
+    
+    // 创作类
+    { id: 'memory-1', name: '初出茅庐', description: '发布第一条记忆', icon: '📝', category: 'creation', requirement_type: 'memory_count', requirement_value: 1, points: 5 },
+    { id: 'memory-10', name: '小有成就', description: '发布10条记忆', icon: '📚', category: 'creation', requirement_type: 'memory_count', requirement_value: 10, points: 20 },
+    { id: 'memory-50', name: '内容达人', description: '发布50条记忆', icon: '📖', category: 'creation', requirement_type: 'memory_count', requirement_value: 50, points: 100 },
+    { id: 'memory-100', name: '知识宝库', description: '发布100条记忆', icon: '💎', category: 'creation', requirement_type: 'memory_count', requirement_value: 100, points: 200 },
+    
+    // 互动类
+    { id: 'likes-10', name: '初获认可', description: '获得10个赞', icon: '❤️', category: 'interaction', requirement_type: 'likes_received', requirement_value: 10, points: 10 },
+    { id: 'likes-100', name: '广受好评', description: '获得100个赞', icon: '💖', category: 'interaction', requirement_type: 'likes_received', requirement_value: 100, points: 50 },
+    { id: 'likes-500', name: '人气之星', description: '获得500个赞', icon: '⭐', category: 'interaction', requirement_type: 'likes_received', requirement_value: 500, points: 200 },
+    { id: 'bookmarks-10', name: '值得收藏', description: '被收藏10次', icon: '🔖', category: 'interaction', requirement_type: 'bookmarks_received', requirement_value: 10, points: 15 },
+    { id: 'bookmarks-50', name: '珍藏佳作', description: '被收藏50次', icon: '🏅', category: 'interaction', requirement_type: 'bookmarks_received', requirement_value: 50, points: 75 },
+    
+    // 社交类
+    { id: 'followers-10', name: '小有名气', description: '获得10个关注者', icon: '👥', category: 'social', requirement_type: 'followers', requirement_value: 10, points: 15 },
+    { id: 'followers-50', name: '人气作者', description: '获得50个关注者', icon: '🌟', category: 'social', requirement_type: 'followers', requirement_value: 50, points: 75 },
+    { id: 'followers-100', name: '意见领袖', description: '获得100个关注者', icon: '👑', category: 'social', requirement_type: 'followers', requirement_value: 100, points: 150 },
+    
+    // 评论类
+    { id: 'comments-10', name: '热心评论', description: '发表10条评论', icon: '💬', category: 'comment', requirement_type: 'comments_made', requirement_value: 10, points: 10 },
+    { id: 'comments-50', name: '互动达人', description: '发表50条评论', icon: '🗣️', category: 'comment', requirement_type: 'comments_made', requirement_value: 50, points: 50 },
+  ];
+
+  for (const badge of defaultBadges) {
+    const existing = db.prepare('SELECT id FROM badges WHERE id = ?').get(badge.id);
+    if (!existing) {
+      db.prepare('INSERT INTO badges (id, name, description, icon, category, requirement_type, requirement_value, points) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+        badge.id, badge.name, badge.description, badge.icon, badge.category, badge.requirement_type, badge.requirement_value, badge.points
+      );
+    }
+  }
+};
+
+// Initialize badges on startup
+initBadges();
+
+// Get all badges
+app.get('/api/badges', (req, res) => {
+  try {
+    const badges = db.prepare('SELECT * FROM badges ORDER BY category, requirement_value').all();
+    res.json(badges);
+  } catch (error) {
+    console.error('获取徽章列表失败:', error);
+    res.status(500).json({ error: '获取徽章列表失败' });
+  }
+});
+
+// Get user's badges
+app.get('/api/user/badges', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const earnedBadges = db.prepare(`
+      SELECT b.*, ub.earned_at 
+      FROM badges b
+      JOIN user_badges ub ON b.id = ub.badge_id
+      WHERE ub.user_id = ?
+      ORDER BY ub.earned_at DESC
+    `).all(userId);
+    
+    const allBadges = db.prepare('SELECT * FROM badges ORDER BY category, requirement_value').all();
+    
+    res.json({
+      earned: earnedBadges,
+      all: allBadges,
+      totalPoints: earnedBadges.reduce((sum, b) => sum + b.points, 0)
+    });
+  } catch (error) {
+    console.error('获取用户徽章失败:', error);
+    res.status(500).json({ error: '获取用户徽章失败' });
+  }
+});
+
+// Check and award badges for a user
+const checkAndAwardBadges = (userId) => {
+  try {
+    // Get user stats
+    const stats = db.prepare(`
+      SELECT 
+        u.id,
+        (SELECT COUNT(*) FROM memories WHERE user_id = u.id AND deleted_at IS NULL) as memory_count,
+        (SELECT COALESCE(SUM(likes_count), 0) FROM memories WHERE user_id = u.id AND deleted_at IS NULL) as likes_received,
+        (SELECT COALESCE(SUM(bookmarks_count), 0) FROM memories WHERE user_id = u.id AND deleted_at IS NULL) as bookmarks_received,
+        (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers,
+        (SELECT COUNT(*) FROM comments WHERE user_id = u.id) as comments_made,
+        (SELECT COALESCE(MAX(streak), 0) FROM sign_ins WHERE user_id = u.id) as checkin_streak,
+        (SELECT COUNT(*) FROM sign_ins WHERE user_id = u.id) as checkin_total
+      FROM users u
+      WHERE u.id = ?
+    `).get(userId);
+
+    if (!stats) return [];
+
+    const allBadges = db.prepare('SELECT * FROM badges').all();
+    const earnedBadgeIds = db.prepare('SELECT badge_id FROM user_badges WHERE user_id = ?').all(userId).map(b => b.badge_id);
+    const newlyEarned = [];
+
+    for (const badge of allBadges) {
+      if (earnedBadgeIds.includes(badge.id)) continue;
+
+      let earned = false;
+      switch (badge.requirement_type) {
+        case 'memory_count':
+          earned = stats.memory_count >= badge.requirement_value;
+          break;
+        case 'likes_received':
+          earned = stats.likes_received >= badge.requirement_value;
+          break;
+        case 'bookmarks_received':
+          earned = stats.bookmarks_received >= badge.requirement_value;
+          break;
+        case 'followers':
+          earned = stats.followers >= badge.requirement_value;
+          break;
+        case 'comments_made':
+          earned = stats.comments_made >= badge.requirement_value;
+          break;
+        case 'checkin_streak':
+          earned = stats.checkin_streak >= badge.requirement_value;
+          break;
+        case 'checkin_total':
+          earned = stats.checkin_total >= badge.requirement_value;
+          break;
+      }
+
+      if (earned) {
+        db.prepare('INSERT INTO user_badges (id, user_id, badge_id) VALUES (?, ?, ?)').run(
+          `ub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          userId,
+          badge.id
+        );
+        newlyEarned.push(badge);
+      }
+    }
+
+    return newlyEarned;
+  } catch (error) {
+    console.error('检查徽章失败:', error);
+    return [];
+  }
+};
+
+// Trigger badge check
+app.post('/api/user/badges/check', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const newlyEarned = checkAndAwardBadges(userId);
+    res.json({ 
+      message: newlyEarned.length > 0 ? `恭喜获得 ${newlyEarned.length} 个新徽章！` : '没有新徽章',
+      newBadges: newlyEarned
+    });
+  } catch (error) {
+    console.error('检查徽章失败:', error);
+    res.status(500).json({ error: '检查徽章失败' });
   }
 });
 
