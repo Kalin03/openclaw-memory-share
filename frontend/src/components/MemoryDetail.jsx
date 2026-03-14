@@ -19,6 +19,7 @@ import ReadingMode from './ReadingMode';
 import FeedbackButtons from './FeedbackButtons';
 import TableOfContents from './TableOfContents';
 import CommentReactions from './CommentReactions';
+import SharePoster from './SharePoster';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -48,6 +49,7 @@ const MemoryDetail = () => {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showLockModal, setShowLockModal] = useState(false);
   const [showReadingMode, setShowReadingMode] = useState(false);
+  const [showSharePoster, setShowSharePoster] = useState(false);
 
   useEffect(() => {
     fetchMemory();
@@ -414,6 +416,15 @@ const MemoryDetail = () => {
                 title="分享链接"
               >
                 {shareCopied ? <Check size={18} /> : <Share2 size={18} />}
+              </button>
+              
+              <button
+                onClick={() => setShowSharePoster(true)}
+                className="p-2 rounded-lg text-gray-500 hover:text-primary transition-colors"
+                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                title="生成分享海报"
+              >
+                <FileText size={18} />
               </button>
               
               {user?.id === memory.user_id && (
@@ -825,6 +836,14 @@ const MemoryDetail = () => {
         avatar={memory?.avatar}
         createdAt={memory?.created_at}
       />
+
+      {/* Share Poster */}
+      {showSharePoster && memory && (
+        <SharePoster
+          memory={memory}
+          onClose={() => setShowSharePoster(false)}
+        />
+      )}
     </div>
   );
 };
