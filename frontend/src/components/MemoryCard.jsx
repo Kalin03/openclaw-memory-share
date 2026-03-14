@@ -5,6 +5,7 @@ import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, Ext
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
+import { undoManager } from '../utils/undoManager';
 import axios from 'axios';
 import AddToSeriesModal from './AddToSeriesModal';
 import AddToCollectionModal from './AddToCollectionModal';
@@ -78,7 +79,20 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
       if (isReadLater) {
         await axios.delete(`${API_URL}/memories/${memory.id}/read-later`);
         setIsReadLater(false);
-        toast.success('已从稍后阅读移除');
+        
+        // 显示带撤销按钮的 toast
+        toast.withUndo(
+          '已从稍后阅读移除',
+          async () => {
+            try {
+              await axios.post(`${API_URL}/memories/${memory.id}/read-later`);
+              setIsReadLater(true);
+            } catch (err) {
+              console.error('撤销失败:', err);
+            }
+          },
+          { type: 'info' }
+        );
       } else {
         await axios.post(`${API_URL}/memories/${memory.id}/read-later`);
         setIsReadLater(true);
@@ -103,7 +117,23 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
       } else {
         await axios.post(`${API_URL}/memories/${memory.id}/archive`);
         setIsArchived(true);
-        toast.success('已归档');
+        
+        // 显示带撤销按钮的 toast
+        toast.withUndo(
+          '已归档',
+          async () => {
+            try {
+              await axios.delete(`${API_URL}/memories/${memory.id}/archive`);
+              setIsArchived(false);
+              toast.success('已取消归档');
+            } catch (err) {
+              console.error('撤销归档失败:', err);
+              toast.error('操作失败');
+            }
+          },
+          { type: 'info' }
+        );
+        
         // 可选：从列表中移除
         if (onDelete) {
           setTimeout(() => onDelete(memory.id), 500);
@@ -192,6 +222,23 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
       const res = await axios.post(`${API_URL}/memories/${memory.id}/like`);
       setIsLiked(res.data.liked);
       setLikesCount(prev => res.data.liked ? prev + 1 : prev - 1);
+      
+      // 如果是取消点赞，显示撤销提示
+      if (!res.data.liked) {
+        toast.withUndo(
+          '已取消点赞',
+          async () => {
+            try {
+              const undoRes = await axios.post(`${API_URL}/memories/${memory.id}/like`);
+              setIsLiked(undoRes.data.liked);
+              setLikesCount(prev => prev + 1);
+            } catch (err) {
+              console.error('撤销点赞失败:', err);
+            }
+          },
+          { type: 'info' }
+        );
+      }
     } catch (err) {
       console.error('点赞失败:', err);
       toast.error('点赞失败');
@@ -207,6 +254,25 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
       const res = await axios.post(`${API_URL}/memories/${memory.id}/bookmark`);
       setIsBookmarked(res.data.bookmarked);
       setBookmarksCount(prev => res.data.bookmarked ? prev + 1 : prev - 1);
+      
+      // 如果是取消收藏，显示撤销提示
+      if (!res.data.bookmarked) {
+        toast.withUndo(
+          '已取消收藏',
+          async () => {
+            try {
+              const undoRes = await axios.post(`${API_URL}/memories/${memory.id}/bookmark`);
+              setIsBookmarked(undoRes.data.bookmarked);
+              setBookmarksCount(prev => prev + 1);
+            } catch (err) {
+              console.error('撤销收藏失败:', err);
+            }
+          },
+          { type: 'info' }
+        );
+      } else {
+        toast.success('已收藏');
+      }
     } catch (err) {
       console.error('收藏失败:', err);
       toast.error('收藏失败');

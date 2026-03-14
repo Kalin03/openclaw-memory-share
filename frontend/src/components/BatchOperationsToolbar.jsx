@@ -22,7 +22,7 @@ const BatchOperationsToolbar = ({
   onComplete,
   userId
 }) => {
-  const { showSuccess, showError } = useToast();
+  const { success, error, withUndo } = useToast();
   const [loading, setLoading] = useState(false);
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
@@ -57,20 +57,37 @@ const BatchOperationsToolbar = ({
   }, [showCollectionModal]);
 
   const handleBatchDelete = async () => {
-    if (!window.confirm(`确定要删除选中的 ${selectedCount} 条记忆吗？\n记忆将被移至回收站，可以恢复。`)) {
-      return;
-    }
-
     setLoading(true);
+    const deletedIds = [...selectedIds];
+    
     try {
       const res = await axios.post('/api/memories/batch/delete', {
-        memoryIds: selectedIds
+        memoryIds: deletedIds
       });
-      showSuccess(res.data.message);
+      
       onClearSelection();
       onComplete();
-    } catch (error) {
-      showError(error.response?.data?.error || '删除失败');
+      
+      // 显示带撤销按钮的提示
+      withUndo(
+        `已删除 ${deletedIds.length} 条记忆`,
+        async () => {
+          try {
+            // 批量恢复
+            for (const id of deletedIds) {
+              await axios.post(`/api/trash/${id}/restore`);
+            }
+            onComplete();
+            success('已恢复所有记忆');
+          } catch (err) {
+            console.error('恢复失败:', err);
+            error('部分记忆恢复失败');
+          }
+        },
+        { type: 'warning' }
+      );
+    } catch (err) {
+      error(err.response?.data?.error || '删除失败');
     } finally {
       setLoading(false);
     }
@@ -82,10 +99,10 @@ const BatchOperationsToolbar = ({
       const res = await axios.post('/api/memories/batch/bookmark', {
         memoryIds: selectedIds
       });
-      showSuccess(res.data.message);
+      success(res.data.message);
       onComplete();
     } catch (error) {
-      showError(error.response?.data?.error || '收藏失败');
+      error(error.response?.data?.error || '收藏失败');
     } finally {
       setLoading(false);
     }
@@ -97,10 +114,10 @@ const BatchOperationsToolbar = ({
       const res = await axios.post('/api/memories/batch/unbookmark', {
         memoryIds: selectedIds
       });
-      showSuccess(res.data.message);
+      success(res.data.message);
       onComplete();
     } catch (error) {
-      showError(error.response?.data?.error || '取消收藏失败');
+      error(error.response?.data?.error || '取消收藏失败');
     } finally {
       setLoading(false);
     }
@@ -108,7 +125,7 @@ const BatchOperationsToolbar = ({
 
   const handleAddToSeries = async () => {
     if (!selectedSeriesId) {
-      showError('请选择系列');
+      error('请选择系列');
       return;
     }
 
@@ -118,12 +135,12 @@ const BatchOperationsToolbar = ({
         memoryIds: selectedIds,
         seriesId: selectedSeriesId
       });
-      showSuccess(res.data.message);
+      success(res.data.message);
       setShowSeriesModal(false);
       setSelectedSeriesId('');
       onComplete();
     } catch (error) {
-      showError(error.response?.data?.error || '添加到系列失败');
+      error(error.response?.data?.error || '添加到系列失败');
     } finally {
       setLoading(false);
     }
@@ -131,7 +148,7 @@ const BatchOperationsToolbar = ({
 
   const handleAddToCollection = async () => {
     if (!selectedCollectionId) {
-      showError('请选择收藏夹');
+      error('请选择收藏夹');
       return;
     }
 
@@ -141,12 +158,12 @@ const BatchOperationsToolbar = ({
         memoryIds: selectedIds,
         collectionId: selectedCollectionId
       });
-      showSuccess(res.data.message);
+      success(res.data.message);
       setShowCollectionModal(false);
       setSelectedCollectionId('');
       onComplete();
     } catch (error) {
-      showError(error.response?.data?.error || '添加到收藏夹失败');
+      error(error.response?.data?.error || '添加到收藏夹失败');
     } finally {
       setLoading(false);
     }
@@ -160,10 +177,10 @@ const BatchOperationsToolbar = ({
         memoryIds: selectedIds,
         visibility
       });
-      showSuccess(res.data.message);
+      success(res.data.message);
       onComplete();
     } catch (error) {
-      showError(error.response?.data?.error || '修改可见性失败');
+      error(error.response?.data?.error || '修改可见性失败');
     } finally {
       setLoading(false);
     }

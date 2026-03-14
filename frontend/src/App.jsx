@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import Navbar from './components/Navbar';
 import MemoryCard from './components/MemoryCard';
 import MemoryCardSkeleton from './components/MemoryCardSkeleton';
@@ -171,8 +172,51 @@ const Home = () => {
   }, [searchParams]);
 
   const handleDelete = async (id) => {
-    if (window.confirm('确定要删除这条记忆吗？')) {
-      await deleteMemory(id);
+    // 找到要删除的记忆，保存数据用于撤销
+    const memoryToDelete = memories.find(m => m.id === id);
+    if (!memoryToDelete) return;
+
+    // 先从 UI 中移除
+    const previousMemories = [...memories];
+    
+    try {
+      // 执行删除（软删除到回收站）
+      await axios.delete(`/api/memories/${id}`);
+      
+      // 刷新列表
+      if (isSearchMode) {
+        searchMemories(searchQuery, page);
+      } else if (isFollowingMode) {
+        fetchFollowingMemories(page);
+      } else {
+        fetchMemories(page);
+      }
+      
+      // 显示带撤销按钮的 toast
+      showToast.withUndo(
+        `已删除「${memoryToDelete.title?.slice(0, 20) || '记忆'}」`,
+        async () => {
+          // 撤销操作：从回收站恢复
+          try {
+            await axios.post(`/api/trash/${id}/restore`);
+            // 刷新列表
+            if (isSearchMode) {
+              searchMemories(searchQuery, page);
+            } else if (isFollowingMode) {
+              fetchFollowingMemories(page);
+            } else {
+              fetchMemories(page);
+            }
+          } catch (err) {
+            console.error('恢复失败:', err);
+            showToast.error('恢复失败');
+          }
+        },
+        { type: 'warning' }
+      );
+    } catch (err) {
+      console.error('删除失败:', err);
+      showToast.error('删除失败');
     }
   };
 

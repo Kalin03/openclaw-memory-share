@@ -1,18 +1,30 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, Info, AlertTriangle, Undo2 } from 'lucide-react';
 
 const ToastContext = createContext(null);
 
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((message, type = 'info', duration = 3000) => {
+  const addToast = useCallback((message, type = 'info', duration = 3000, options = {}) => {
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, message, type, duration }]);
+    const toast = { 
+      id, 
+      message, 
+      type, 
+      duration,
+      undoAction: options.undoAction || null,
+      undoLabel: options.undoLabel || '撤销'
+    };
+    
+    setToasts(prev => [...prev, toast]);
+    
+    // 如果有撤销操作，延长显示时间
+    const actualDuration = options.undoAction ? 8000 : duration;
     
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, duration);
+    }, actualDuration);
     
     return id;
   }, []);
@@ -21,33 +33,70 @@ export const ToastProvider = ({ children }) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const success = useCallback((message, duration) => addToast(message, 'success', duration), [addToast]);
-  const error = useCallback((message, duration) => addToast(message, 'error', duration), [addToast]);
-  const info = useCallback((message, duration) => addToast(message, 'info', duration), [addToast]);
-  const warning = useCallback((message, duration) => addToast(message, 'warning', duration), [addToast]);
+  const success = useCallback((message, duration, options) => addToast(message, 'success', duration, options), [addToast]);
+  const error = useCallback((message, duration, options) => addToast(message, 'error', duration, options), [addToast]);
+  const info = useCallback((message, duration, options) => addToast(message, 'info', duration, options), [addToast]);
+  const warning = useCallback((message, duration, options) => addToast(message, 'warning', duration, options), [addToast]);
+
+  /**
+   * 显示带撤销按钮的 Toast
+   * @param {string} message - 提示消息
+   * @param {function} undoAction - 撤销函数
+   * @param {object} options - 其他选项
+   */
+  const withUndo = useCallback((message, undoAction, options = {}) => {
+    return addToast(message, options.type || 'info', options.duration || 8000, {
+      undoAction,
+      undoLabel: options.undoLabel || '撤销'
+    });
+  }, [addToast]);
+
+  /**
+   * 处理撤销操作
+   */
+  const handleUndo = useCallback(async (toastId, undoAction) => {
+    try {
+      await undoAction();
+      removeToast(toastId);
+      // 显示撤销成功提示
+      addToast('已撤销操作', 'success', 2000);
+    } catch (error) {
+      console.error('撤销失败:', error);
+      addToast('撤销失败', 'error', 3000);
+    }
+  }, [addToast, removeToast]);
 
   return (
-    <ToastContext.Provider value={{ addToast, removeToast, success, error, info, warning }}>
+    <ToastContext.Provider value={{ 
+      addToast, 
+      removeToast, 
+      success, 
+      error, 
+      info, 
+      warning,
+      withUndo,
+      handleUndo
+    }}>
       {children}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ToastContainer toasts={toasts} removeToast={removeToast} onUndo={handleUndo} />
     </ToastContext.Provider>
   );
 };
 
-const ToastContainer = ({ toasts, removeToast }) => {
+const ToastContainer = ({ toasts, removeToast, onUndo }) => {
   if (toasts.length === 0) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
       {toasts.map(toast => (
-        <Toast key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
+        <Toast key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} onUndo={onUndo} />
       ))}
     </div>
   );
 };
 
-const Toast = ({ toast, onClose }) => {
-  const { message, type } = toast;
+const Toast = ({ toast, onClose, onUndo }) => {
+  const { message, type, undoAction, undoLabel } = toast;
 
   const config = {
     success: {
@@ -77,10 +126,24 @@ const Toast = ({ toast, onClose }) => {
   return (
     <div 
       className={`${bg} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 min-w-[280px] max-w-[400px] animate-slide-in`}
-      onClick={onClose}
     >
       <Icon size={20} className={iconColor} />
       <span className="flex-1 text-sm font-medium">{message}</span>
+      
+      {/* 撤销按钮 */}
+      {undoAction && (
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            onUndo(toast.id, undoAction);
+          }}
+          className="flex items-center gap-1 px-2 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
+        >
+          <Undo2 size={14} />
+          {undoLabel}
+        </button>
+      )}
+      
       <button 
         onClick={(e) => { e.stopPropagation(); onClose(); }}
         className="p-1 hover:bg-white/20 rounded transition-colors"
