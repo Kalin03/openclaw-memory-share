@@ -392,6 +392,15 @@ try {
   // 字段已存在，忽略错误
 }
 
+// 添加用户等级和积分字段
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN points INTEGER DEFAULT 0`);
+  db.exec(`ALTER TABLE users ADD COLUMN level INTEGER DEFAULT 1`);
+  console.log('✅ Added points and level columns to users table');
+} catch (e) {
+  // 字段已存在，忽略错误
+}
+
 // 添加锁定相关字段
 try {
   db.exec(`ALTER TABLE memories ADD COLUMN is_locked INTEGER DEFAULT 0`);
@@ -2250,6 +2259,110 @@ app.get('/api/recommendations', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取推荐失败:', error);
     res.status(500).json({ error: '获取推荐失败' });
+  }
+});
+
+// ===== User Level & Points System =====
+
+// 计算用户等级所需积分
+const getLevelThreshold = (level) => {
+  // 等级1: 0, 等级2: 100, 等级3: 300, 等级4: 600, 等级5: 1000...
+  return (level * (level - 1) * 50);
+};
+
+// 根据积分计算等级
+const calculateLevel = (points) => {
+  let level = 1;
+  while (getLevelThreshold(level + 1) <= points) {
+    level++;
+  }
+  return level;
+};
+
+// 更新用户积分
+const updateUserPoints = (userId) => {
+  try {
+    // 计算积分：
+    // 发布记忆: 10分/篇
+    // 获得点赞: 5分/个
+    // 获得收藏: 8分/个
+    // 发表评论: 2分/条
+    // 连续签到: 额外奖励
+    
+    const stats = db.prepare(`
+      SELECT 
+        (SELECT COUNT(*) FROM memories WHERE user_id = ? AND deleted_at IS NULL) * 10 as memory_points,
+        (SELECT COALESCE(SUM(likes_count), 0) FROM memories WHERE user_id = ?) * 5 as like_points,
+        (SELECT COALESCE(SUM(bookmarks_count), 0) FROM memories WHERE user_id = ?) * 8 as bookmark_points,
+        (SELECT COUNT(*) FROM comments WHERE user_id = ?) * 2 as comment_points,
+        (SELECT COUNT(*) FROM checkins WHERE user_id = ?) * 3 as checkin_points
+    `).get(userId, userId, userId, userId, userId);
+
+    const totalPoints = (stats.memory_points || 0) + (stats.like_points || 0) + 
+                        (stats.bookmark_points || 0) + (stats.comment_points || 0) + 
+                        (stats.checkin_points || 0);
+    
+    const newLevel = calculateLevel(totalPoints);
+    
+    db.prepare('UPDATE users SET points = ?, level = ? WHERE id = ?').run(totalPoints, newLevel, userId);
+    
+    return { points: totalPoints, level: newLevel };
+  } catch (error) {
+    console.error('更新用户积分错误:', error);
+    return null;
+  }
+};
+
+// Get user level info
+app.get('/api/user/level', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const result = updateUserPoints(userId);
+    
+    const user = db.prepare('SELECT points, level FROM users WHERE id = ?').get(userId);
+    
+    const currentLevel = user.level || 1;
+    const currentPoints = user.points || 0;
+    const nextLevelThreshold = getLevelThreshold(currentLevel + 1);
+    const currentLevelThreshold = getLevelThreshold(currentLevel);
+    const progress = currentLevel > 1 ? 
+      Math.min(100, Math.round(((currentPoints - currentLevelThreshold) / (nextLevelThreshold - currentLevelThreshold)) * 100)) :
+      Math.min(100, Math.round((currentPoints / nextLevelThreshold) * 100));
+
+    res.json({
+      level: currentLevel,
+      points: currentPoints,
+      nextLevelPoints: nextLevelThreshold,
+      progress,
+      pointsToNext: nextLevelThreshold - currentPoints
+    });
+  } catch (error) {
+    console.error('获取用户等级错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Get level leaderboard
+app.get('/api/leaderboard', (req, res) => {
+  const { limit = 10 } = req.query;
+
+  try {
+    // 先更新所有用户的积分
+    const users = db.prepare('SELECT id FROM users').all();
+    users.forEach(u => updateUserPoints(u.id));
+    
+    const leaderboard = db.prepare(`
+      SELECT id, username, avatar, points, level
+      FROM users
+      ORDER BY points DESC
+      LIMIT ?
+    `).all(parseInt(limit));
+
+    res.json({ leaderboard });
+  } catch (error) {
+    console.error('获取排行榜错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
 

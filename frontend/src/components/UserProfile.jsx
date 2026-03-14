@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import TagManager from './TagManager';
 import MilestoneManager from './MilestoneManager';
+import { UserLevelBadge, UserLevelProgress } from './UserLevel';
 import axios from 'axios';
 import FollowList from './FollowList';
 import CreateSeriesModal from './CreateSeriesModal';
@@ -237,7 +238,10 @@ const UserProfile = ({ onClose }) => {
                 {user.avatar || '🦞'}
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-dark">{user.username}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold text-dark">{user.username}</h2>
+                  <UserLevelBadge level={user.level || 1} size="sm" />
+                </div>
                 <p className="text-gray-500 text-sm">{user.email}</p>
               </div>
             </div>
