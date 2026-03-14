@@ -16,6 +16,7 @@ import QuickActionsBar from './QuickActionsBar';
 import LockMemoryModal from './LockMemoryModal';
 import ReminderManager from './ReminderManager';
 import ReadingMode from './ReadingMode';
+import FeedbackButtons from './FeedbackButtons';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -652,6 +653,14 @@ const MemoryDetail = () => {
 
         {/* Rating Section */}
         <RatingSection memoryId={id} />
+
+        {/* Feedback Section */}
+        <section className="mt-8 card">
+          <h2 className="text-lg font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+            这条记忆对您有帮助吗？
+          </h2>
+          <FeedbackButtons memoryId={id} />
+        </section>
 
         {/* Memory References Section */}
         <MemoryReferences memoryId={id} />

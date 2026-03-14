@@ -328,6 +328,16 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, memory_id)
   );
+
+  CREATE TABLE IF NOT EXISTS memory_feedback (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    is_helpful INTEGER NOT NULL,
+    feedback TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, memory_id)
+  );
 `);
 
 // Create indexes for memory_references
@@ -1732,6 +1742,84 @@ app.delete('/api/read-later', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('清空稍后阅读错误:', error);
     res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// ===== Feedback API =====
+
+// Submit feedback for a memory
+app.post('/api/memories/:id/feedback', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+  const { isHelpful, feedback = '' } = req.body;
+
+  if (typeof isHelpful !== 'boolean') {
+    return res.status(400).json({ error: '请提供有效的反馈' });
+  }
+
+  try {
+    const memory = db.prepare('SELECT id FROM memories WHERE id = ?').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    const existing = db.prepare('SELECT * FROM memory_feedback WHERE user_id = ? AND memory_id = ?').get(userId, memoryId);
+
+    if (existing) {
+      db.prepare('UPDATE memory_feedback SET is_helpful = ?, feedback = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?').run(isHelpful ? 1 : 0, feedback, existing.id);
+      res.json({ success: true, message: '反馈已更新', isNew: false });
+    } else {
+      const id = uuidv4();
+      db.prepare('INSERT INTO memory_feedback (id, user_id, memory_id, is_helpful, feedback) VALUES (?, ?, ?, ?, ?)').run(id, userId, memoryId, isHelpful ? 1 : 0, feedback);
+      res.json({ success: true, message: '感谢您的反馈', isNew: true });
+    }
+  } catch (error) {
+    console.error('提交反馈错误:', error);
+    res.status(500).json({ error: '提交失败' });
+  }
+});
+
+// Get feedback stats for a memory
+app.get('/api/memories/:id/feedback', (req, res) => {
+  const memoryId = req.params.id;
+
+  try {
+    const stats = db.prepare(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN is_helpful = 1 THEN 1 ELSE 0 END) as helpful_count,
+        SUM(CASE WHEN is_helpful = 0 THEN 1 ELSE 0 END) as not_helpful_count
+      FROM memory_feedback 
+      WHERE memory_id = ?
+    `).get(memoryId);
+
+    res.json({
+      total: stats.total || 0,
+      helpfulCount: stats.helpful_count || 0,
+      notHelpfulCount: stats.not_helpful_count || 0,
+      helpfulRate: stats.total > 0 ? Math.round((stats.helpful_count / stats.total) * 100) : 0
+    });
+  } catch (error) {
+    console.error('获取反馈统计错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Get user's feedback for a memory
+app.get('/api/memories/:id/feedback/me', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const feedback = db.prepare('SELECT * FROM memory_feedback WHERE user_id = ? AND memory_id = ?').get(userId, memoryId);
+    res.json({ 
+      hasFeedback: !!feedback, 
+      isHelpful: feedback ? !!feedback.is_helpful : null,
+      feedback: feedback?.feedback || ''
+    });
+  } catch (error) {
+    console.error('获取用户反馈错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
 
