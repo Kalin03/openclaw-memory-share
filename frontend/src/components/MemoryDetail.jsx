@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History, Link2, Tag, User, Clock, FileText, BarChart2 } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, ArrowLeft, Copy, Check, Share2, Edit2, Trash2, Eye, Reply, ThumbsUp, History, Link2, Tag, User, Clock, FileText, BarChart2, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import MentionInput from './MentionInput';
@@ -15,6 +15,7 @@ import ContentQualityAnalyzer from './ContentQualityAnalyzer';
 import QuickActionsBar from './QuickActionsBar';
 import LockMemoryModal from './LockMemoryModal';
 import ReminderManager from './ReminderManager';
+import ReadingMode from './ReadingMode';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -43,6 +44,7 @@ const MemoryDetail = () => {
   const [relatedMemories, setRelatedMemories] = useState([]);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showLockModal, setShowLockModal] = useState(false);
+  const [showReadingMode, setShowReadingMode] = useState(false);
 
   useEffect(() => {
     fetchMemory();
@@ -456,6 +458,15 @@ const MemoryDetail = () => {
               <BarChart2 size={16} />
               <span className="hidden sm:inline">质量分析</span>
             </button>
+            <button
+              onClick={() => setShowReadingMode(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
+              style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+              title="专注阅读"
+            >
+              <BookOpen size={16} />
+              <span className="hidden sm:inline">阅读模式</span>
+            </button>
           </div>
 
           {/* Reading Stats */}
@@ -781,6 +792,17 @@ const MemoryDetail = () => {
           </div>
         </div>
       )}
+
+      {/* Reading Mode */}
+      <ReadingMode
+        isOpen={showReadingMode}
+        onClose={() => setShowReadingMode(false)}
+        title={memory?.title}
+        content={memory?.content}
+        author={memory?.username}
+        avatar={memory?.avatar}
+        createdAt={memory?.created_at}
+      />
     </div>
   );
 };
