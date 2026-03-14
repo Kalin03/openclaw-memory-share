@@ -357,6 +357,24 @@ try {
   // Indexes already exist
 }
 
+// 创建阅读进度表
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS reading_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      memory_id TEXT NOT NULL,
+      position INTEGER DEFAULT 0,
+      progress INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, memory_id)
+    )
+  `);
+  console.log('✅ Created reading_progress table');
+} catch (e) {
+  // 表已存在
+}
+
 // Create indexes for memory_references
 try {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_source_memory ON memory_references(source_memory_id)`);
@@ -2058,6 +2076,57 @@ app.delete('/api/history/:id', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('删除浏览记录错误:', error);
     res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// ===== Reading Progress API =====
+
+// Save reading progress
+app.post('/api/memories/:id/progress', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+  const { position = 0, progress = 0 } = req.body;
+
+  try {
+    // 使用 UPSERT
+    db.prepare(`
+      INSERT INTO reading_progress (user_id, memory_id, position, progress, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, memory_id) 
+      DO UPDATE SET position = ?, progress = ?, updated_at = CURRENT_TIMESTAMP
+    `).run(userId, memoryId, position, progress, position, progress);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('保存阅读进度错误:', error);
+    res.status(500).json({ error: '保存失败' });
+  }
+});
+
+// Get reading progress
+app.get('/api/memories/:id/progress', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const result = db.prepare(`
+      SELECT position, progress, updated_at
+      FROM reading_progress
+      WHERE user_id = ? AND memory_id = ?
+    `).get(userId, memoryId);
+
+    if (result) {
+      res.json({
+        position: result.position,
+        progress: result.progress,
+        updatedAt: result.updated_at
+      });
+    } else {
+      res.json({ progress: 0, position: 0 });
+    }
+  } catch (error) {
+    console.error('获取阅读进度错误:', error);
+    res.status(500).json({ error: '获取失败' });
   }
 });
 
