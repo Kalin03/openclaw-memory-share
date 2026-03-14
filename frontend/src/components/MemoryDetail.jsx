@@ -17,6 +17,7 @@ import LockMemoryModal from './LockMemoryModal';
 import ReminderManager from './ReminderManager';
 import ReadingMode from './ReadingMode';
 import FeedbackButtons from './FeedbackButtons';
+import TableOfContents from './TableOfContents';
 import axios from 'axios';
 
 const API_URL = '/api';
@@ -373,8 +374,10 @@ const MemoryDetail = () => {
       </div>
 
       {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <article className="card">
+      <div className="flex gap-6 max-w-6xl mx-auto px-4 py-8">
+        {/* Main Content */}
+        <main className="flex-1 min-w-0">
+          <article className="card">
           {/* Author Info */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -738,6 +741,14 @@ const MemoryDetail = () => {
           </section>
         )}
       </main>
+
+        {/* Table of Contents - Sidebar */}
+        {memory?.content && (
+          <aside className="hidden xl:block flex-shrink-0">
+            <TableOfContents content={memory.content} />
+          </aside>
+        )}
+      </div>
 
       {/* Quick Actions Bar */}
       {memory && (
