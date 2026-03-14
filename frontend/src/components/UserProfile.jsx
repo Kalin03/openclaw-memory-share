@@ -7,6 +7,7 @@ import AnalyticsDashboard from './AnalyticsDashboard';
 import TagManager from './TagManager';
 import MilestoneManager from './MilestoneManager';
 import { UserLevelBadge, UserLevelProgress } from './UserLevel';
+import AutoDarkMode from './AutoDarkMode';
 import axios from 'axios';
 import FollowList from './FollowList';
 import CreateSeriesModal from './CreateSeriesModal';
@@ -566,6 +567,9 @@ const UserProfile = ({ onClose }) => {
                     </div>
                   </div>
                 </div>
+
+                {/* Dark Mode Settings */}
+                <AutoDarkMode />
               </div>
             )
           ) : activeTab === 'memories' ? (
