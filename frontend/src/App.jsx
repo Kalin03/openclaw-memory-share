@@ -30,6 +30,7 @@ import ReadLaterList from './components/ReadLaterList';
 import ArchiveList from './components/ArchiveList';
 import CommandPalette from './components/CommandPalette';
 import BadgeShowcase from './components/BadgeShowcase';
+import RSSSubscription from './components/RSSSubscription';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -52,6 +53,7 @@ const Home = () => {
   const [showViewHistory, setShowViewHistory] = useState(false);
   const [showMemoryGraph, setShowMemoryGraph] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showRSS, setShowRSS] = useState(false);
   const [showBadges, setShowBadges] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
@@ -192,6 +194,9 @@ const Home = () => {
         break;
       case 'badges':
         setShowBadges(true);
+        break;
+      case 'rss':
+        setShowRSS(true);
         break;
       default:
         break;
@@ -679,6 +684,11 @@ const Home = () => {
       {/* Badge Showcase */}
       {showBadges && (
         <BadgeShowcase onClose={() => setShowBadges(false)} />
+      )}
+      
+      {/* RSS Subscription */}
+      {showRSS && (
+        <RSSSubscription onClose={() => setShowRSS(false)} />
       )}
       
       {/* Keyboard Shortcuts Help Modal */}

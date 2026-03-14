@@ -6111,6 +6111,187 @@ app.post('/api/user/badges/check', authMiddleware, (req, res) => {
   }
 });
 
+// ==================== RSS Feed ====================
+
+// Get user's RSS feed token (for private feed)
+app.get('/api/user/rss-token', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    let user = db.prepare('SELECT rss_token FROM users WHERE id = ?').get(userId);
+    
+    // Generate token if not exists
+    if (!user.rss_token) {
+      const rssToken = uuidv4().replace(/-/g, '');
+      db.prepare('UPDATE users SET rss_token = ? WHERE id = ?').run(rssToken, userId);
+      user = { rss_token: rssToken };
+    }
+    
+    res.json({ 
+      rssToken: user.rss_token,
+      feedUrl: `${req.protocol}://${req.get('host')}/api/rss/user/${user.rss_token}`
+    });
+  } catch (error) {
+    console.error('获取RSS token失败:', error);
+    res.status(500).json({ error: '获取RSS token失败' });
+  }
+});
+
+// Regenerate RSS token
+app.post('/api/user/rss-token/regenerate', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  
+  try {
+    const rssToken = uuidv4().replace(/-/g, '');
+    db.prepare('UPDATE users SET rss_token = ? WHERE id = ?').run(rssToken, userId);
+    
+    res.json({ 
+      rssToken: rssToken,
+      feedUrl: `${req.protocol}://${req.get('host')}/api/rss/user/${rssToken}`
+    });
+  } catch (error) {
+    console.error('重新生成RSS token失败:', error);
+    res.status(500).json({ error: '重新生成RSS token失败' });
+  }
+});
+
+// RSS feed for a user (by token)
+app.get('/api/rss/user/:token', (req, res) => {
+  const { token } = req.params;
+  
+  try {
+    // Find user by RSS token
+    const user = db.prepare('SELECT id, username, avatar FROM users WHERE rss_token = ?').get(token);
+    if (!user) {
+      return res.status(404).send('RSS feed not found');
+    }
+    
+    // Get user's public memories
+    const memories = db.prepare(`
+      SELECT m.id, m.title, m.content, m.tags, m.created_at, m.views_count, m.likes_count
+      FROM memories m
+      WHERE m.user_id = ? 
+        AND m.deleted_at IS NULL
+        AND m.visibility = 'public'
+      ORDER BY m.created_at DESC
+      LIMIT 50
+    `).all(user.id);
+    
+    // Build RSS XML
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const escapeXml = (str) => {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    };
+    
+    const rssItems = memories.map(m => {
+      const link = `${baseUrl}/memory/${m.id}`;
+      const tags = m.tags ? m.tags.split(',').filter(Boolean).map(t => `#${t}`).join(' ') : '';
+      const description = m.content.substring(0, 200) + (m.content.length > 200 ? '...' : '');
+      
+      return `
+    <item>
+      <title>${escapeXml(m.title)}</title>
+      <link>${link}</link>
+      <guid isPermaLink="true">${link}</guid>
+      <description>${escapeXml(description)}</description>
+      <content:encoded><![CDATA[${m.content}]]></content:encoded>
+      <pubDate>${new Date(m.created_at).toUTCString()}</pubDate>
+      ${tags ? `<category>${escapeXml(tags)}</category>` : ''}
+    </item>`;
+    }).join('');
+    
+    const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${escapeXml(user.username)}的记忆 - Memory Share</title>
+    <link>${baseUrl}</link>
+    <atom:link href="${baseUrl}/api/rss/user/${token}" rel="self" type="application/rss+xml"/>
+    <description>${escapeXml(user.username)}的公开记忆订阅</description>
+    <language>zh-CN</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <generator>Memory Share RSS Generator</generator>
+    ${rssItems}
+  </channel>
+</rss>`;
+    
+    res.set('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.send(rssXml);
+  } catch (error) {
+    console.error('生成RSS失败:', error);
+    res.status(500).send('生成RSS失败');
+  }
+});
+
+// Public RSS feed (all public memories)
+app.get('/api/rss/public', (req, res) => {
+  try {
+    // Get recent public memories
+    const memories = db.prepare(`
+      SELECT m.id, m.title, m.content, m.tags, m.created_at, m.user_id, u.username, u.avatar
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.deleted_at IS NULL
+        AND m.visibility = 'public'
+      ORDER BY m.created_at DESC
+      LIMIT 50
+    `).all();
+    
+    // Build RSS XML
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const escapeXml = (str) => {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    };
+    
+    const rssItems = memories.map(m => {
+      const link = `${baseUrl}/memory/${m.id}`;
+      const description = m.content.substring(0, 200) + (m.content.length > 200 ? '...' : '');
+      
+      return `
+    <item>
+      <title>${escapeXml(m.title)}</title>
+      <link>${link}</link>
+      <guid isPermaLink="true">${link}</guid>
+      <description>${escapeXml(description)}</description>
+      <content:encoded><![CDATA[${m.content}]]></content:encoded>
+      <pubDate>${new Date(m.created_at).toUTCString()}</pubDate>
+      <author>${escapeXml(m.username)}</author>
+    </item>`;
+    }).join('');
+    
+    const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Memory Share - 公开记忆</title>
+    <link>${baseUrl}</link>
+    <atom:link href="${baseUrl}/api/rss/public" rel="self" type="application/rss+xml"/>
+    <description>Memory Share 平台的公开记忆订阅</description>
+    <language>zh-CN</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <generator>Memory Share RSS Generator</generator>
+    ${rssItems}
+  </channel>
+</rss>`;
+    
+    res.set('Content-Type', 'application/rss+xml; charset=utf-8');
+    res.send(rssXml);
+  } catch (error) {
+    console.error('生成公开RSS失败:', error);
+    res.status(500).send('生成RSS失败');
+  }
+});
+
 // ==================== Health Check ====================
 
 app.get('/api/health', (req, res) => {
