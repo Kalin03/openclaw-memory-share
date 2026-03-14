@@ -28,6 +28,7 @@ import SkipToContent from './components/SkipToContent';
 import OfflineIndicator from './components/OfflineIndicator';
 import ReadLaterList from './components/ReadLaterList';
 import ArchiveList from './components/ArchiveList';
+import CommandPalette from './components/CommandPalette';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -49,6 +50,7 @@ const Home = () => {
   const [showArchives, setShowArchives] = useState(false);
   const [showViewHistory, setShowViewHistory] = useState(false);
   const [showMemoryGraph, setShowMemoryGraph] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -108,9 +110,88 @@ const Home = () => {
       else if (showProfileModal) setShowProfileModal(false);
       else if (showAuthModal) setShowAuthModal(false);
       else if (showHelp) setShowHelp(false);
+      else if (showCommandPalette) setShowCommandPalette(false);
     },
     isEnabled: location.pathname === '/', // Only enable on home page
   });
+
+  // Command palette shortcut (Cmd/Ctrl + K)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Command palette action handler
+  const handleCommandAction = (action) => {
+    switch (action) {
+      case 'new-memory':
+        if (user) {
+          setShowCreateModal(true);
+        } else {
+          setShowAuthModal(true);
+        }
+        break;
+      case 'search':
+        const searchInput = document.querySelector('input[type="text"][placeholder*="搜索"]');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        break;
+      case 'hot':
+        navigate('/');
+        setActiveTab('hot');
+        fetchHotMemories(1);
+        break;
+      case 'calendar':
+        setShowCalendar(true);
+        break;
+      case 'bookmarks':
+        setShowProfileModal(true);
+        break;
+      case 'read-later':
+        setShowReadLater(true);
+        break;
+      case 'archives':
+        setShowArchives(true);
+        break;
+      case 'trash':
+        navigate('/?trash=true');
+        showToast('回收站功能已移动到个人主页', 'info');
+        break;
+      case 'moments':
+        setShowMoments(true);
+        break;
+      case 'tags':
+        showToast('标签管理功能已移动到个人主页', 'info');
+        setShowProfileModal(true);
+        break;
+      case 'stats':
+        setShowProfileModal(true);
+        break;
+      case 'reminders':
+        setShowReminders(true);
+        break;
+      case 'graph':
+        setShowMemoryGraph(true);
+        break;
+      case 'shortcuts':
+        setShowHelp(true);
+        break;
+      case 'help':
+        showToast('帮助中心功能开发中', 'info');
+        break;
+      default:
+        break;
+    }
+  };
 
   // Handle selection toggle
   const handleSelectToggle = (memoryId) => {
@@ -567,6 +648,13 @@ const Home = () => {
       }} />}
       {showProfileModal && <UserProfile onClose={() => setShowProfileModal(false)} />}
       {showMoments && <Moments user={user} onBack={() => setShowMoments(false)} />}
+      
+      {/* Command Palette */}
+      <CommandPalette 
+        isOpen={showCommandPalette} 
+        onClose={() => setShowCommandPalette(false)}
+        onNavigate={handleCommandAction}
+      />
       
       {/* Keyboard Shortcuts Help Modal */}
       <ShortcutsHelpModal />
