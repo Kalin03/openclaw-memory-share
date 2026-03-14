@@ -8,6 +8,7 @@ import TagManager from './TagManager';
 import MilestoneManager from './MilestoneManager';
 import { UserLevelBadge, UserLevelProgress } from './UserLevel';
 import AutoDarkMode from './AutoDarkMode';
+import CreatorDashboard from './CreatorDashboard';
 import axios from 'axios';
 import FollowList from './FollowList';
 import CreateSeriesModal from './CreateSeriesModal';
@@ -567,6 +568,9 @@ const UserProfile = ({ onClose }) => {
                     </div>
                   </div>
                 </div>
+
+                {/* Creator Dashboard */}
+                <CreatorDashboard />
 
                 {/* Dark Mode Settings */}
                 <AutoDarkMode />

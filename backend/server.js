@@ -2741,6 +2741,38 @@ app.get('/api/user/:id', (req, res) => {
   }
 });
 
+// Get user stats (Creator Dashboard)
+app.get('/api/user/stats', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // 基础统计
+    const memoriesCount = db.prepare('SELECT COUNT(*) as count FROM memories WHERE user_id = ? AND deleted_at IS NULL').get(userId).count;
+    const totalViews = db.prepare('SELECT COALESCE(SUM(views_count), 0) as total FROM memories WHERE user_id = ?').get(userId).total;
+    const totalLikes = db.prepare('SELECT COALESCE(SUM(likes_count), 0) as total FROM memories WHERE user_id = ?').get(userId).total;
+    const totalBookmarks = db.prepare('SELECT COALESCE(SUM(bookmarks_count), 0) as total FROM memories WHERE user_id = ?').get(userId).total;
+    const totalComments = db.prepare('SELECT COUNT(*) as count FROM comments WHERE user_id = ?').get(userId).count;
+    const followersCount = db.prepare('SELECT COUNT(*) as count FROM follows WHERE following_id = ?').get(userId).count;
+    
+    // 用户积分和等级
+    const user = db.prepare('SELECT points, level FROM users WHERE id = ?').get(userId);
+
+    res.json({
+      memoriesCount,
+      totalViews: Number(totalViews),
+      totalLikes: Number(totalLikes),
+      totalBookmarks: Number(totalBookmarks),
+      totalComments,
+      followersCount,
+      points: user?.points || 0,
+      level: user?.level || 1
+    });
+  } catch (error) {
+    console.error('获取用户统计错误:', error);
+    res.status(500).json({ error: '获取统计失败' });
+  }
+});
+
 // Get user memories
 app.get('/api/user/:id/memories', optionalAuth, (req, res) => {
   try {
