@@ -338,7 +338,24 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, memory_id)
   );
+
+  CREATE TABLE IF NOT EXISTS view_history (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    memory_id TEXT NOT NULL,
+    view_duration INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
+
+// Create indexes for view_history
+try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_view_history_user ON view_history(user_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_view_history_memory ON view_history(memory_id)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_view_history_created ON view_history(created_at)`);
+} catch (e) {
+  // Indexes already exist
+}
 
 // Create indexes for memory_references
 try {
@@ -1946,6 +1963,101 @@ app.get('/api/archives', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('获取归档列表错误:', error);
     res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// ===== View History API =====
+
+// Record a view
+app.post('/api/memories/:id/view', authMiddleware, (req, res) => {
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+  const { duration = 0 } = req.body;
+
+  try {
+    const memory = db.prepare('SELECT id FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    const id = uuidv4();
+    db.prepare('INSERT INTO view_history (id, user_id, memory_id, view_duration) VALUES (?, ?, ?, ?)').run(id, userId, memoryId, duration);
+    
+    // 更新记忆的阅读量
+    db.prepare('UPDATE memories SET views_count = views_count + 1 WHERE id = ?').run(memoryId);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('记录浏览错误:', error);
+    res.status(500).json({ error: '记录失败' });
+  }
+});
+
+// Get view history
+app.get('/api/history', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { page = 1, limit = 20 } = req.query;
+  const offset = (page - 1) * limit;
+
+  try {
+    const history = db.prepare(`
+      SELECT vh.id as history_id, vh.view_duration, vh.created_at as viewed_at,
+        m.id, m.title, m.content, m.tags, m.created_at, m.likes_count, 
+        m.bookmarks_count, m.views_count, m.comments_count,
+        u.username, u.avatar
+      FROM view_history vh
+      JOIN memories m ON vh.memory_id = m.id
+      JOIN users u ON m.user_id = u.id
+      WHERE vh.user_id = ? AND m.deleted_at IS NULL
+      ORDER BY vh.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(userId, limit, offset);
+
+    const total = db.prepare('SELECT COUNT(*) as count FROM view_history WHERE user_id = ?').get(userId).count;
+
+    res.json({
+      history,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取浏览历史错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// Clear view history
+app.delete('/api/history', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    db.prepare('DELETE FROM view_history WHERE user_id = ?').run(userId);
+    res.json({ success: true, message: '已清空浏览历史' });
+  } catch (error) {
+    console.error('清空浏览历史错误:', error);
+    res.status(500).json({ error: '操作失败' });
+  }
+});
+
+// Delete single history item
+app.delete('/api/history/:id', authMiddleware, (req, res) => {
+  const historyId = req.params.id;
+  const userId = req.user.id;
+
+  try {
+    const result = db.prepare('DELETE FROM view_history WHERE id = ? AND user_id = ?').run(historyId, userId);
+    if (result.changes > 0) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: '记录不存在' });
+    }
+  } catch (error) {
+    console.error('删除浏览记录错误:', error);
+    res.status(500).json({ error: '删除失败' });
   }
 });
 

@@ -10,6 +10,7 @@ import UserProfile from './components/UserProfile';
 import RandomMemory from './components/RandomMemory';
 import TagCloud from './components/TagCloud';
 import PersonalizedRecommendations from './components/PersonalizedRecommendations';
+import ViewHistory from './components/ViewHistory';
 import BackToTop from './components/BackToTop';
 import MemoryDetail from './components/MemoryDetail';
 import SeriesDetail from './components/SeriesDetail';
@@ -44,6 +45,7 @@ const Home = () => {
   const [showReminders, setShowReminders] = useState(false);
   const [showReadLater, setShowReadLater] = useState(false);
   const [showArchives, setShowArchives] = useState(false);
+  const [showViewHistory, setShowViewHistory] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -235,6 +237,7 @@ const Home = () => {
         }}
         onReadLaterClick={() => setShowReadLater(true)}
         onArchivesClick={() => setShowArchives(true)}
+        onViewHistoryClick={() => setShowViewHistory(true)}
       />
 
       {/* Hero Section */}
@@ -567,6 +570,12 @@ const Home = () => {
       <ArchiveList 
         isOpen={showArchives}
         onClose={() => setShowArchives(false)}
+      />
+
+      {/* View History */}
+      <ViewHistory 
+        isOpen={showViewHistory}
+        onClose={() => setShowViewHistory(false)}
       />
     </div>
   );
