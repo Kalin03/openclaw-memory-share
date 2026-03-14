@@ -21,7 +21,8 @@ import {
   HelpCircle,
   Command,
   Trophy,
-  Rss
+  Rss,
+  Database
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -48,6 +49,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'trash', icon: Trash2, label: '回收站', shortcut: 'T', action: () => onNavigate('trash'), category: '我的' },
       { id: 'badges', icon: Trophy, label: '徽章成就', action: () => onNavigate('badges'), category: '我的' },
       { id: 'rss', icon: Rss, label: 'RSS 订阅', action: () => onNavigate('rss'), category: '我的' },
+      { id: 'backup', icon: Database, label: '数据备份', action: () => onNavigate('backup'), category: '我的' },
       { id: 'moments', icon: Users, label: '沸点', shortcut: 'M', action: () => onNavigate('moments'), category: '社区' },
       { id: 'tags', icon: Tag, label: '标签管理', shortcut: 'G', action: () => onNavigate('tags'), category: '管理' },
       { id: 'stats', icon: BarChart3, label: '数据统计', shortcut: 'S', action: () => onNavigate('stats'), category: '管理' },

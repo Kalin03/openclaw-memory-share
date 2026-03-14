@@ -31,6 +31,7 @@ import ArchiveList from './components/ArchiveList';
 import CommandPalette from './components/CommandPalette';
 import BadgeShowcase from './components/BadgeShowcase';
 import RSSSubscription from './components/RSSSubscription';
+import DataBackupRestore from './components/DataBackupRestore';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -55,6 +56,7 @@ const Home = () => {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showRSS, setShowRSS] = useState(false);
   const [showBadges, setShowBadges] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -197,6 +199,9 @@ const Home = () => {
         break;
       case 'rss':
         setShowRSS(true);
+        break;
+      case 'backup':
+        setShowBackup(true);
         break;
       default:
         break;
@@ -689,6 +694,11 @@ const Home = () => {
       {/* RSS Subscription */}
       {showRSS && (
         <RSSSubscription onClose={() => setShowRSS(false)} />
+      )}
+      
+      {/* Data Backup & Restore */}
+      {showBackup && (
+        <DataBackupRestore onClose={() => setShowBackup(false)} />
       )}
       
       {/* Keyboard Shortcuts Help Modal */}

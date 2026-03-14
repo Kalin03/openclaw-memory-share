@@ -4705,24 +4705,231 @@ app.get('/api/search', (req, res) => {
   }
 });
 
-// Export user data
+// Export user data (enhanced)
 app.get('/api/user/export', authMiddleware, (req, res) => {
   const userId = req.user.id;
+  const format = req.query.format || 'json'; // json or markdown
 
   try {
     const user = db.prepare('SELECT id, username, email, avatar, created_at FROM users WHERE id = ?').get(userId);
     const memories = db.prepare('SELECT * FROM memories WHERE user_id = ? AND deleted_at IS NULL').all(userId);
-    const bookmarks = db.prepare('SELECT * FROM bookmarks WHERE user_id = ?').all(userId);
+    const bookmarks = db.prepare(`
+      SELECT b.*, m.title, m.content, m.tags, m.created_at as memory_created_at
+      FROM bookmarks b
+      JOIN memories m ON b.memory_id = m.id
+      WHERE b.user_id = ?
+    `).all(userId);
+    const collections = db.prepare('SELECT * FROM collections WHERE user_id = ?').all(userId);
+    const series = db.prepare('SELECT * FROM series WHERE user_id = ?').all(userId);
+    const signIns = db.prepare('SELECT * FROM sign_ins WHERE user_id = ? ORDER BY checkin_date DESC').all(userId);
+    const badges = db.prepare(`
+      SELECT ub.*, b.name, b.description, b.icon
+      FROM user_badges ub
+      JOIN badges b ON ub.badge_id = b.id
+      WHERE ub.user_id = ?
+    `).all(userId);
+    const comments = db.prepare(`
+      SELECT c.*, m.title as memory_title
+      FROM comments c
+      JOIN memories m ON c.memory_id = m.id
+      WHERE c.user_id = ?
+    `).all(userId);
 
-    res.json({
-      user,
-      memories,
-      bookmarks,
-      exportedAt: new Date().toISOString()
-    });
+    const exportData = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      exportedBy: 'Memory Share',
+      user: {
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar,
+        createdAt: user.created_at
+      },
+      memories: memories.map(m => ({
+        id: m.id,
+        title: m.title,
+        content: m.content,
+        tags: m.tags,
+        visibility: m.visibility,
+        likesCount: m.likes_count,
+        bookmarksCount: m.bookmarks_count,
+        viewsCount: m.views_count,
+        createdAt: m.created_at,
+        updatedAt: m.updated_at
+      })),
+      bookmarks: bookmarks.map(b => ({
+        memoryId: b.memory_id,
+        memoryTitle: b.title,
+        memoryContent: b.content,
+        memoryTags: b.tags,
+        memoryCreatedAt: b.memory_created_at,
+        bookmarkedAt: b.created_at
+      })),
+      collections: collections.map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        isPublic: c.is_public,
+        createdAt: c.created_at
+      })),
+      series: series.map(s => ({
+        id: s.id,
+        title: s.title,
+        description: s.description,
+        createdAt: s.created_at
+      })),
+      signIns: signIns.map(s => ({
+        date: s.checkin_date,
+        streak: s.streak
+      })),
+      badges: badges.map(b => ({
+        name: b.name,
+        description: b.description,
+        icon: b.icon,
+        earnedAt: b.earned_at
+      })),
+      comments: comments.map(c => ({
+        memoryTitle: c.memory_title,
+        content: c.content,
+        createdAt: c.created_at
+      })),
+      stats: {
+        totalMemories: memories.length,
+        totalBookmarks: bookmarks.length,
+        totalCollections: collections.length,
+        totalSeries: series.length,
+        totalSignIns: signIns.length,
+        totalBadges: badges.length,
+        totalComments: comments.length
+      }
+    };
+
+    if (format === 'markdown') {
+      // 生成Markdown格式
+      let md = `# ${user.username} 的记忆导出\n\n`;
+      md += `> 导出时间: ${exportData.exportedAt}\n\n`;
+      md += `## 📊 统计\n\n`;
+      md += `- 记忆数量: ${exportData.stats.totalMemories}\n`;
+      md += `- 收藏数量: ${exportData.stats.totalBookmarks}\n`;
+      md += `- 收藏夹: ${exportData.stats.totalCollections}\n`;
+      md += `- 系列: ${exportData.stats.totalSeries}\n`;
+      md += `- 签到天数: ${exportData.stats.totalSignIns}\n`;
+      md += `- 获得徽章: ${exportData.stats.totalBadges}\n\n`;
+      
+      md += `## 📝 记忆列表\n\n`;
+      memories.forEach((m, i) => {
+        md += `### ${i + 1}. ${m.title}\n\n`;
+        md += `> 创建于: ${m.created_at}\n\n`;
+        if (m.tags) {
+          md += `标签: ${m.tags.split(',').map(t => `#${t}`).join(' ')}\n\n`;
+        }
+        md += `${m.content}\n\n`;
+        md += `---\n\n`;
+      });
+
+      res.set('Content-Type', 'text/markdown; charset=utf-8');
+      res.set('Content-Disposition', `attachment; filename="memory-share-export-${new Date().toISOString().split('T')[0]}.md"`);
+      res.send(md);
+    } else {
+      res.set('Content-Type', 'application/json');
+      res.set('Content-Disposition', `attachment; filename="memory-share-export-${new Date().toISOString().split('T')[0]}.json"`);
+      res.json(exportData);
+    }
   } catch (error) {
     console.error('导出错误:', error);
     res.status(500).json({ error: '导出失败' });
+  }
+});
+
+// Import user data
+app.post('/api/user/import', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { data, options = {} } = req.body;
+
+  if (!data || !data.version) {
+    return res.status(400).json({ error: '无效的导入数据格式' });
+  }
+
+  const results = {
+    memories: { success: 0, failed: 0, skipped: 0 },
+    bookmarks: { success: 0, failed: 0, skipped: 0 },
+    collections: { success: 0, failed: 0, skipped: 0 },
+    series: { success: 0, failed: 0, skipped: 0 }
+  };
+
+  try {
+    // 导入记忆
+    if (data.memories && options.importMemories !== false) {
+      for (const memory of data.memories) {
+        try {
+          // 检查是否已存在相同标题和内容的记忆
+          const existing = db.prepare(`
+            SELECT id FROM memories 
+            WHERE user_id = ? AND title = ? AND content = ?
+          `).get(userId, memory.title, memory.content);
+
+          if (existing) {
+            results.memories.skipped++;
+            continue;
+          }
+
+          const newId = uuidv4();
+          db.prepare(`
+            INSERT INTO memories (id, user_id, title, content, tags, visibility, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(newId, userId, memory.title, memory.content, memory.tags || '', memory.visibility || 'public', memory.createdAt || new Date().toISOString());
+
+          results.memories.success++;
+        } catch (err) {
+          console.error('导入记忆失败:', err);
+          results.memories.failed++;
+        }
+      }
+    }
+
+    // 导入收藏夹
+    if (data.collections && options.importCollections !== false) {
+      for (const collection of data.collections) {
+        try {
+          const newId = uuidv4();
+          db.prepare(`
+            INSERT INTO collections (id, user_id, name, description, is_public, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(newId, userId, collection.name, collection.description || '', collection.isPublic ? 1 : 0, collection.createdAt || new Date().toISOString());
+
+          results.collections.success++;
+        } catch (err) {
+          console.error('导入收藏夹失败:', err);
+          results.collections.failed++;
+        }
+      }
+    }
+
+    // 导入系列
+    if (data.series && options.importSeries !== false) {
+      for (const s of data.series) {
+        try {
+          const newId = uuidv4();
+          db.prepare(`
+            INSERT INTO series (id, user_id, title, description, created_at)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(newId, userId, s.title, s.description || '', s.createdAt || new Date().toISOString());
+
+          results.series.success++;
+        } catch (err) {
+          console.error('导入系列失败:', err);
+          results.series.failed++;
+        }
+      }
+    }
+
+    res.json({
+      message: '导入完成',
+      results
+    });
+  } catch (error) {
+    console.error('导入错误:', error);
+    res.status(500).json({ error: '导入失败' });
   }
 });
 
