@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell, QrCode, Clock, Archive } from 'lucide-react';
+import { Heart, Bookmark, MessageCircle, Copy, Trash2, Check, Edit2, Share2, ExternalLink, Eye, UserPlus, UserCheck, Loader2, BookOpen, Globe, Lock, Users, FolderPlus, CheckSquare, Bell, QrCode, Clock, Archive, Tag, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { highlightText } from '../utils/highlight';
@@ -23,7 +23,7 @@ const visibilityConfig = {
   private: { icon: Lock, label: '私密', color: 'text-gray-500' }
 };
 
-const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelectMode = false, isSelected = false, onSelect, onSetReminder }) => {
+const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelectMode = false, isSelected = false, onSelect, onSetReminder, enableHoverPreview = true }) => {
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -45,6 +45,13 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
   const [showAddToCollection, setShowAddToCollection] = useState(false);
   const [isReadLater, setIsReadLater] = useState(false);
   const [isArchived, setIsArchived] = useState(false);
+  
+  // 悬停预览状态
+  const [showHoverPreview, setShowHoverPreview] = useState(false);
+  const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+  const hoverTimeoutRef = useRef(null);
+  const hideTimeoutRef = useRef(null);
+  const cardRef = useRef(null);
 
   // 检查关注状态
   useEffect(() => {
@@ -373,11 +380,123 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
       navigate(`/memory/${memory.id}`);
     }
   };
+  
+  // 悬停预览事件处理
+  const handleMouseEnter = (e) => {
+    if (!enableHoverPreview || isSelectMode) return;
+    
+    // 清除隐藏定时器
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+
+    // 设置显示定时器
+    hoverTimeoutRef.current = setTimeout(() => {
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        let x, y;
+        
+        // 智能定位
+        x = rect.right + 16;
+        if (x + 384 > viewportWidth) {
+          x = rect.left - 400;
+        }
+        if (x < 0) {
+          x = 16;
+        }
+        
+        y = rect.top;
+        if (y + 320 > viewportHeight) {
+          y = viewportHeight - 340;
+        }
+        
+        setPreviewPosition({ x, y });
+        setShowHoverPreview(true);
+      }
+    }, 800);
+  };
+
+  const handleMouseLeave = () => {
+    if (!enableHoverPreview) return;
+    
+    // 清除显示定时器
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+
+    // 延迟隐藏
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowHoverPreview(false);
+    }, 200);
+  };
+
+  // 预览框鼠标事件
+  const handlePreviewMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  };
+
+  const handlePreviewMouseLeave = () => {
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowHoverPreview(false);
+    }, 200);
+  };
+
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    };
+  }, []);
+
+  // 格式化预览时间
+  const formatPreviewDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return '刚刚';
+    if (diffMins < 60) return `${diffMins} 分钟前`;
+    if (diffHours < 24) return `${diffHours} 小时前`;
+    if (diffDays < 7) return `${diffDays} 天前`;
+    return date.toLocaleDateString('zh-CN');
+  };
+
+  // 截取内容摘要
+  const getContentPreview = (content, maxLength = 200) => {
+    if (!content) return '暂无内容';
+    const cleanContent = content
+      .replace(/#{1,6}\s/g, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]+\)/g, '[图片]')
+      .replace(/\n/g, ' ')
+      .trim();
+    
+    if (cleanContent.length <= maxLength) return cleanContent;
+    return cleanContent.slice(0, maxLength) + '...';
+  };
 
   return (
     <div 
+      ref={cardRef}
       className={`card relative cursor-pointer transition-all ${isSelected ? 'ring-2 ring-primary shadow-lg' : ''} ${isSelectMode ? 'hover:ring-2 hover:ring-primary/50' : ''}`}
       onClick={handleCardClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Selection checkbox in select mode */}
       {isSelectMode && (
@@ -734,6 +853,92 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
           }}
           onClose={() => setShowLockModal(false)}
         />
+      )}
+      
+      {/* 悬停预览弹窗 */}
+      {showHoverPreview && enableHoverPreview && (
+        <div
+          className="fixed z-[9999] w-96 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-fade-in"
+          style={{
+            left: previewPosition.x,
+            top: previewPosition.y,
+          }}
+          onMouseEnter={handlePreviewMouseEnter}
+          onMouseLeave={handlePreviewMouseLeave}
+        >
+          {/* 标题栏 */}
+          <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-700 border-b border-gray-200 dark:border-gray-600">
+            <h3 className="font-semibold text-gray-900 dark:text-white line-clamp-2">
+              {memory.title || '无标题'}
+            </h3>
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center gap-1">
+                <User className="w-3 h-3" />
+                {memory.author_name || memory.username || '匿名'}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {formatPreviewDate(memory.created_at)}
+              </span>
+            </div>
+          </div>
+
+          {/* 内容摘要 */}
+          <div className="px-4 py-3">
+            <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+              {getContentPreview(memory.content)}
+            </p>
+          </div>
+
+          {/* 标签 */}
+          {tags && tags.length > 0 && (
+            <div className="px-4 pb-3">
+              <div className="flex flex-wrap gap-1.5">
+                {tags.slice(0, 5).map((tag, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                  >
+                    <Tag className="w-3 h-3 mr-1" />
+                    {tag}
+                  </span>
+                ))}
+                {tags.length > 5 && (
+                  <span className="text-xs text-gray-400">
+                    +{tags.length - 5}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 统计信息 */}
+          <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600 flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <span className="flex items-center gap-1">
+              <Heart className="w-3.5 h-3.5" />
+              {likesCount || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageCircle className="w-3.5 h-3.5" />
+              {comments?.length || memory.comments_count || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <Bookmark className="w-3.5 h-3.5" />
+              {bookmarksCount || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <Eye className="w-3.5 h-3.5" />
+              {memory.views || 0}
+            </span>
+          </div>
+
+          {/* 悬停提示 */}
+          <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-center">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              点击卡片查看详情
+            </span>
+          </div>
+        </div>
       )}
     </div>
   );
