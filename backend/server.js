@@ -6648,6 +6648,106 @@ app.post('/api/quick-notes/batch-delete', authMiddleware, (req, res) => {
   }
 });
 
+// ==================== Bookmarklet ====================
+
+// Bookmarklet 保存接口（使用 token 认证）
+app.post('/api/bookmarklet/save', (req, res) => {
+  const { token, title, content, url, tags } = req.body;
+
+  if (!token) {
+    return res.status(401).json({ error: '请提供认证token' });
+  }
+
+  // 从 token 获取用户
+  let userId;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    userId = decoded.id;
+  } catch (err) {
+    return res.status(401).json({ error: '无效的token' });
+  }
+
+  if (!content) {
+    return res.status(400).json({ error: '内容不能为空' });
+  }
+
+  try {
+    // 构建完整内容
+    const fullContent = url 
+      ? `${content}\n\n---\n🔗 来源: ${url}`
+      : content;
+
+    const id = uuidv4();
+    db.prepare(`
+      INSERT INTO quick_notes (id, user_id, content, tags)
+      VALUES (?, ?, ?, ?)
+    `).run(id, userId, fullContent, tags || '');
+
+    res.json({ 
+      success: true, 
+      message: '已保存到收集箱',
+      noteId: id 
+    });
+  } catch (error) {
+    console.error('Bookmarklet保存错误:', error);
+    res.status(500).json({ error: '保存失败' });
+  }
+});
+
+// 获取 Bookmarklet 代码
+app.get('/api/bookmarklet/code', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  
+  // 生成用户专用 token
+  const bookmarkletToken = jwt.sign({ id: userId, type: 'bookmarklet' }, JWT_SECRET, { expiresIn: '365d' });
+
+  const bookmarkletCode = `javascript:(function(){
+    var d=document;
+    var w=window;
+    var e=encodeURIComponent;
+    var title=d.title||'';
+    var url=d.location.href||'';
+    var sel=w.getSelection?w.getSelection().toString():'';
+    var content=sel||'';
+    var tags=prompt('添加标签（逗号分隔）：','')||'';
+    var token='${bookmarkletToken}';
+    var api='${baseUrl}/api/bookmarklet/save';
+    var data={
+      token:token,
+      title:title,
+      content:content||title,
+      url:url,
+      tags:tags
+    };
+    fetch(api,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(data)
+    }).then(r=>r.json())
+    .then(r=>{
+      if(r.success){
+        alert('✅ '+r.message);
+      }else{
+        alert('❌ '+(r.error||'保存失败'));
+      }
+    }).catch(e=>{
+      alert('❌ 网络错误');
+    });
+  })();`;
+
+  res.json({ 
+    bookmarkletCode,
+    bookmarkletToken,
+    bookmarkletUrl: bookmarkletCode,
+    instructions: [
+      '将下面的按钮拖拽到浏览器书签栏',
+      '或者复制代码，手动创建书签',
+      '在任意网页点击书签即可保存内容'
+    ]
+  });
+});
+
 // ==================== Health Check ====================
 
 app.get('/api/health', (req, res) => {

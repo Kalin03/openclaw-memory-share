@@ -33,6 +33,7 @@ import BadgeShowcase from './components/BadgeShowcase';
 import RSSSubscription from './components/RSSSubscription';
 import DataBackupRestore from './components/DataBackupRestore';
 import QuickCapture from './components/QuickCapture';
+import BookmarkletSetup from './components/BookmarkletSetup';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -59,6 +60,7 @@ const Home = () => {
   const [showBadges, setShowBadges] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showQuickCapture, setShowQuickCapture] = useState(false);
+  const [showBookmarklet, setShowBookmarklet] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -207,6 +209,9 @@ const Home = () => {
         break;
       case 'quick-capture':
         setShowQuickCapture(true);
+        break;
+      case 'bookmarklet':
+        setShowBookmarklet(true);
         break;
       default:
         break;
@@ -709,6 +714,11 @@ const Home = () => {
       {/* Quick Capture */}
       {showQuickCapture && (
         <QuickCapture onClose={() => setShowQuickCapture(false)} />
+      )}
+      
+      {/* Bookmarklet Setup */}
+      {showBookmarklet && (
+        <BookmarkletSetup onClose={() => setShowBookmarklet(false)} />
       )}
       
       {/* Keyboard Shortcuts Help Modal */}
