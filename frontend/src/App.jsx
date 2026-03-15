@@ -37,6 +37,7 @@ import BookmarkletSetup from './components/BookmarkletSetup';
 import ReadingProgressBar from './components/ReadingProgressBar';
 import WebhookManager from './components/WebhookManager';
 import UserPreferences from './components/UserPreferences';
+import ImportExternalContent from './components/ImportExternalContent';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -66,6 +67,7 @@ const Home = () => {
   const [showBookmarklet, setShowBookmarklet] = useState(false);
   const [showWebhooks, setShowWebhooks] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -223,6 +225,9 @@ const Home = () => {
         break;
       case 'preferences':
         setShowPreferences(true);
+        break;
+      case 'import':
+        setShowImport(true);
         break;
       default:
         break;
@@ -740,6 +745,11 @@ const Home = () => {
       {/* User Preferences */}
       {showPreferences && (
         <UserPreferences onClose={() => setShowPreferences(false)} />
+      )}
+      
+      {/* Import External Content */}
+      {showImport && (
+        <ImportExternalContent onClose={() => setShowImport(false)} onImport={() => fetchMemories(1)} />
       )}
       
       {/* Keyboard Shortcuts Help Modal */}

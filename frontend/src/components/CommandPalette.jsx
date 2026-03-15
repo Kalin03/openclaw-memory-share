@@ -26,7 +26,8 @@ import {
   Inbox,
   Link,
   Webhook,
-  Sliders
+  Sliders,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -55,6 +56,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'badges', icon: Trophy, label: '徽章成就', action: () => onNavigate('badges'), category: '我的' },
       { id: 'rss', icon: Rss, label: 'RSS 订阅', action: () => onNavigate('rss'), category: '我的' },
       { id: 'backup', icon: Database, label: '数据备份', action: () => onNavigate('backup'), category: '我的' },
+      { id: 'import', icon: Upload, label: '导入内容', action: () => onNavigate('import'), category: '工具' },
       { id: 'bookmarklet', icon: Link, label: '书签工具', action: () => onNavigate('bookmarklet'), category: '工具' },
       { id: 'webhooks', icon: Webhook, label: 'Webhook 管理', action: () => onNavigate('webhooks'), category: '工具' },
       { id: 'moments', icon: Users, label: '沸点', shortcut: 'M', action: () => onNavigate('moments'), category: '社区' },
