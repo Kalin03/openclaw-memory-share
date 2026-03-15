@@ -38,6 +38,7 @@ import ReadingProgressBar from './components/ReadingProgressBar';
 import WebhookManager from './components/WebhookManager';
 import UserPreferences from './components/UserPreferences';
 import ImportExternalContent from './components/ImportExternalContent';
+import ProductTour, { useProductTour } from './components/ProductTour';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -49,6 +50,7 @@ const Home = () => {
   const { loading: authLoading, user } = useAuth();
   const { memories, loading, page, totalPages, searchQuery, searchFilters, isSearchMode, fetchMemories, searchMemories, resetSearchFilters, deleteMemory, fetchHotMemories, fetchFollowingMemories, isFollowingMode } = useMemories();
   const { showToast } = useToast();
+  const { showTour, setShowTour, completeTour } = useProductTour();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -393,6 +395,15 @@ const Home = () => {
     <div className="min-h-screen bg-light flex flex-col">
       <OfflineIndicator />
       <SkipToContent />
+      
+      {/* Product Tour for first-time users */}
+      {showTour && (
+        <ProductTour 
+          onClose={() => setShowTour(false)} 
+          onComplete={completeTour}
+        />
+      )}
+      
       <Navbar
         onAuthClick={() => setShowAuthModal(true)}
         onCreateClick={() => setShowCreateModal(true)}
