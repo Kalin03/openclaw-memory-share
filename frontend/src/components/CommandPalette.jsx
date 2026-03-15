@@ -24,7 +24,8 @@ import {
   Rss,
   Database,
   Inbox,
-  Link
+  Link,
+  Webhook
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -54,6 +55,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'rss', icon: Rss, label: 'RSS 订阅', action: () => onNavigate('rss'), category: '我的' },
       { id: 'backup', icon: Database, label: '数据备份', action: () => onNavigate('backup'), category: '我的' },
       { id: 'bookmarklet', icon: Link, label: '书签工具', action: () => onNavigate('bookmarklet'), category: '工具' },
+      { id: 'webhooks', icon: Webhook, label: 'Webhook 管理', action: () => onNavigate('webhooks'), category: '工具' },
       { id: 'moments', icon: Users, label: '沸点', shortcut: 'M', action: () => onNavigate('moments'), category: '社区' },
       { id: 'tags', icon: Tag, label: '标签管理', shortcut: 'G', action: () => onNavigate('tags'), category: '管理' },
       { id: 'stats', icon: BarChart3, label: '数据统计', shortcut: 'S', action: () => onNavigate('stats'), category: '管理' },

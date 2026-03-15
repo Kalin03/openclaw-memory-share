@@ -386,6 +386,29 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     processed_at DATETIME
   );
+
+  CREATE TABLE IF NOT EXISTS webhooks (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    secret TEXT,
+    events TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    last_triggered_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS webhook_logs (
+    id TEXT PRIMARY KEY,
+    webhook_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload TEXT,
+    response_status INTEGER,
+    response_body TEXT,
+    success INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Create indexes for view_history
@@ -6747,6 +6770,176 @@ app.get('/api/bookmarklet/code', authMiddleware, (req, res) => {
     ]
   });
 });
+
+// ==================== Webhooks ====================
+
+// 获取用户的所有webhooks
+app.get('/api/webhooks', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const webhooks = db.prepare(`
+      SELECT id, name, url, events, is_active, last_triggered_at, created_at
+      FROM webhooks WHERE user_id = ?
+      ORDER BY created_at DESC
+    `).all(userId);
+
+    res.json({ webhooks });
+  } catch (error) {
+    console.error('获取webhooks错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 创建webhook
+app.post('/api/webhooks', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { name, url, secret, events } = req.body;
+
+  if (!name || !url || !events || !Array.isArray(events) || events.length === 0) {
+    return res.status(400).json({ error: '请填写完整信息' });
+  }
+
+  try {
+    const id = uuidv4();
+    db.prepare(`
+      INSERT INTO webhooks (id, user_id, name, url, secret, events)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, userId, name, url, secret || '', JSON.stringify(events));
+
+    const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id);
+    res.status(201).json({ message: '创建成功', webhook });
+  } catch (error) {
+    console.error('创建webhook错误:', error);
+    res.status(500).json({ error: '创建失败' });
+  }
+});
+
+// 更新webhook
+app.put('/api/webhooks/:id', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const webhookId = req.params.id;
+  const { name, url, secret, events, is_active } = req.body;
+
+  try {
+    const webhook = db.prepare('SELECT * FROM webhooks WHERE id = ? AND user_id = ?').get(webhookId, userId);
+    if (!webhook) {
+      return res.status(404).json({ error: 'Webhook不存在' });
+    }
+
+    db.prepare(`
+      UPDATE webhooks SET 
+        name = COALESCE(?, name),
+        url = COALESCE(?, url),
+        secret = COALESCE(?, secret),
+        events = COALESCE(?, events),
+        is_active = COALESCE(?, is_active)
+      WHERE id = ?
+    `).run(
+      name || null,
+      url || null,
+      secret !== undefined ? secret : null,
+      events ? JSON.stringify(events) : null,
+      is_active !== undefined ? (is_active ? 1 : 0) : null,
+      webhookId
+    );
+
+    const updated = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(webhookId);
+    res.json({ message: '更新成功', webhook: updated });
+  } catch (error) {
+    console.error('更新webhook错误:', error);
+    res.status(500).json({ error: '更新失败' });
+  }
+});
+
+// 删除webhook
+app.delete('/api/webhooks/:id', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const webhookId = req.params.id;
+
+  try {
+    const result = db.prepare('DELETE FROM webhooks WHERE id = ? AND user_id = ?').run(webhookId, userId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Webhook不存在' });
+    }
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除webhook错误:', error);
+    res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// 获取webhook日志
+app.get('/api/webhooks/:id/logs', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const webhookId = req.params.id;
+  const limit = parseInt(req.query.limit) || 50;
+
+  try {
+    const webhook = db.prepare('SELECT id FROM webhooks WHERE id = ? AND user_id = ?').get(webhookId, userId);
+    if (!webhook) {
+      return res.status(404).json({ error: 'Webhook不存在' });
+    }
+
+    const logs = db.prepare(`
+      SELECT id, event_type, success, response_status, created_at
+      FROM webhook_logs WHERE webhook_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(webhookId, limit);
+
+    res.json({ logs });
+  } catch (error) {
+    console.error('获取webhook日志错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 触发webhook的辅助函数
+const triggerWebhooks = async (userId, eventType, payload) => {
+  try {
+    const webhooks = db.prepare(`
+      SELECT * FROM webhooks 
+      WHERE user_id = ? AND is_active = 1 AND events LIKE ?
+    `).all(userId, `%"${eventType}"%`);
+
+    for (const webhook of webhooks) {
+      const logId = uuidv4();
+      
+      try {
+        const response = await fetch(webhook.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Webhook-Secret': webhook.secret || '',
+            'X-Webhook-Event': eventType
+          },
+          body: JSON.stringify({
+            event: eventType,
+            timestamp: new Date().toISOString(),
+            data: payload
+          })
+        });
+
+        db.prepare(`
+          INSERT INTO webhook_logs (id, webhook_id, event_type, payload, response_status, success)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(logId, webhook.id, eventType, JSON.stringify(payload), response.status, response.ok ? 1 : 0);
+
+        // 更新最后触发时间
+        db.prepare('UPDATE webhooks SET last_triggered_at = CURRENT_TIMESTAMP WHERE id = ?').run(webhook.id);
+      } catch (err) {
+        console.error('Webhook触发失败:', err);
+        db.prepare(`
+          INSERT INTO webhook_logs (id, webhook_id, event_type, payload, success)
+          VALUES (?, ?, ?, ?, 0)
+        `).run(logId, webhook.id, eventType, JSON.stringify(payload));
+      }
+    }
+  } catch (error) {
+    console.error('触发webhooks错误:', error);
+  }
+};
 
 // ==================== Health Check ====================
 
