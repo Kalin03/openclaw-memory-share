@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Smile } from 'lucide-react';
 import axios from 'axios';
+import EmojiPicker from './EmojiPicker';
 
 const API_URL = '/api';
 
@@ -10,6 +12,7 @@ const MentionInput = ({ value, onChange, placeholder, className, minRows = 3 }) 
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [users, setUsers] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showEmoji, setShowEmoji] = useState(false);
   const textareaRef = useRef(null);
   const dropdownRef = useRef(null);
 
@@ -147,6 +150,40 @@ const MentionInput = ({ value, onChange, placeholder, className, minRows = 3 }) 
         placeholder={placeholder}
         rows={minRows}
       />
+
+      {/* Emoji 按钮 */}
+      <button
+        type="button"
+        onClick={() => setShowEmoji(!showEmoji)}
+        className="absolute right-2 bottom-2 p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        title="添加表情"
+      >
+        <Smile size={18} style={{ color: 'var(--text-secondary)' }} />
+      </button>
+
+      {/* Emoji 选择器 */}
+      {showEmoji && (
+        <div className="absolute right-0 bottom-10">
+          <EmojiPicker
+            onSelect={(emoji) => {
+              // 在光标位置插入emoji
+              const textarea = textareaRef.current;
+              const start = textarea.selectionStart;
+              const end = textarea.selectionEnd;
+              const newValue = value.substring(0, start) + emoji + value.substring(end);
+              onChange(newValue);
+              setShowEmoji(false);
+              
+              // 恢复光标位置
+              setTimeout(() => {
+                textarea.focus();
+                textarea.setSelectionRange(start + emoji.length, start + emoji.length);
+              }, 0);
+            }}
+            onClose={() => setShowEmoji(false)}
+          />
+        </div>
+      )}
 
       {/* @用户选择下拉框 */}
       {showMentions && users.length > 0 && (
