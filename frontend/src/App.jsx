@@ -34,6 +34,7 @@ import RSSSubscription from './components/RSSSubscription';
 import DataBackupRestore from './components/DataBackupRestore';
 import QuickCapture from './components/QuickCapture';
 import BookmarkletSetup from './components/BookmarkletSetup';
+import ReadingProgressBar from './components/ReadingProgressBar';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -793,6 +794,7 @@ const App = () => {
       <AuthProvider>
         <MemoriesProvider>
           <ToastProvider>
+            <ReadingProgressBar />
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/memory/:id" element={<MemoryDetail />} />
