@@ -39,6 +39,7 @@ import WebhookManager from './components/WebhookManager';
 import UserPreferences from './components/UserPreferences';
 import ImportExternalContent from './components/ImportExternalContent';
 import ProductTour, { useProductTour } from './components/ProductTour';
+import QuickNoteWidget from './components/QuickNoteWidget';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -768,6 +769,9 @@ const Home = () => {
       
       {/* Back to Top Button */}
       <BackToTop />
+      
+      {/* Quick Note Widget */}
+      <QuickNoteWidget />
       
       {/* Batch Operations Toolbar */}
       {isSelectMode && selectedIds.length > 0 && (
