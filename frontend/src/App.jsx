@@ -36,6 +36,7 @@ import QuickCapture from './components/QuickCapture';
 import BookmarkletSetup from './components/BookmarkletSetup';
 import ReadingProgressBar from './components/ReadingProgressBar';
 import WebhookManager from './components/WebhookManager';
+import UserPreferences from './components/UserPreferences';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -64,6 +65,7 @@ const Home = () => {
   const [showQuickCapture, setShowQuickCapture] = useState(false);
   const [showBookmarklet, setShowBookmarklet] = useState(false);
   const [showWebhooks, setShowWebhooks] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -218,6 +220,9 @@ const Home = () => {
         break;
       case 'webhooks':
         setShowWebhooks(true);
+        break;
+      case 'preferences':
+        setShowPreferences(true);
         break;
       default:
         break;
@@ -730,6 +735,11 @@ const Home = () => {
       {/* Webhook Manager */}
       {showWebhooks && (
         <WebhookManager onClose={() => setShowWebhooks(false)} />
+      )}
+      
+      {/* User Preferences */}
+      {showPreferences && (
+        <UserPreferences onClose={() => setShowPreferences(false)} />
       )}
       
       {/* Keyboard Shortcuts Help Modal */}

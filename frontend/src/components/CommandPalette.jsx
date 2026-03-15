@@ -25,7 +25,8 @@ import {
   Database,
   Inbox,
   Link,
-  Webhook
+  Webhook,
+  Sliders
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -62,6 +63,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'reminders', icon: Bell, label: '我的提醒', action: () => onNavigate('reminders'), category: '管理' },
       { id: 'graph', icon: Globe, label: '记忆图谱', action: () => onNavigate('graph'), category: '浏览' },
       // 设置
+      { id: 'preferences', icon: Sliders, label: '偏好设置', action: () => onNavigate('preferences'), category: '设置' },
       { id: 'theme', icon: theme === 'dark' ? Sun : Moon, label: theme === 'dark' ? '切换亮色模式' : '切换深色模式', shortcut: 'D', action: () => { toggleTheme(); }, category: '设置' },
       { id: 'shortcuts', icon: Keyboard, label: '快捷键帮助', shortcut: '?', action: () => onNavigate('shortcuts'), category: '帮助' },
       { id: 'help', icon: HelpCircle, label: '帮助中心', action: () => onNavigate('help'), category: '帮助' },
