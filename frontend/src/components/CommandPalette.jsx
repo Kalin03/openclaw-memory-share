@@ -22,7 +22,8 @@ import {
   Command,
   Trophy,
   Rss,
-  Database
+  Database,
+  Inbox
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -40,6 +41,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
     const baseCommands = [
       // 内容操作
       { id: 'new-memory', icon: FileText, label: '新建记忆', shortcut: 'N', action: () => onNavigate('new-memory'), category: '内容' },
+      { id: 'quick-capture', icon: Inbox, label: '快速收集', shortcut: 'Q', action: () => onNavigate('quick-capture'), category: '内容' },
       { id: 'search', icon: Search, label: '搜索记忆', shortcut: '/', action: () => onNavigate('search'), category: '内容' },
       { id: 'hot', icon: Flame, label: '热门记忆', shortcut: 'H', action: () => onNavigate('hot'), category: '浏览' },
       { id: 'calendar', icon: Calendar, label: '记忆日历', shortcut: 'C', action: () => onNavigate('calendar'), category: '浏览' },

@@ -32,6 +32,7 @@ import CommandPalette from './components/CommandPalette';
 import BadgeShowcase from './components/BadgeShowcase';
 import RSSSubscription from './components/RSSSubscription';
 import DataBackupRestore from './components/DataBackupRestore';
+import QuickCapture from './components/QuickCapture';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -57,6 +58,7 @@ const Home = () => {
   const [showRSS, setShowRSS] = useState(false);
   const [showBadges, setShowBadges] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
+  const [showQuickCapture, setShowQuickCapture] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -202,6 +204,9 @@ const Home = () => {
         break;
       case 'backup':
         setShowBackup(true);
+        break;
+      case 'quick-capture':
+        setShowQuickCapture(true);
         break;
       default:
         break;
@@ -699,6 +704,11 @@ const Home = () => {
       {/* Data Backup & Restore */}
       {showBackup && (
         <DataBackupRestore onClose={() => setShowBackup(false)} />
+      )}
+      
+      {/* Quick Capture */}
+      {showQuickCapture && (
+        <QuickCapture onClose={() => setShowQuickCapture(false)} />
       )}
       
       {/* Keyboard Shortcuts Help Modal */}

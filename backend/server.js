@@ -375,6 +375,17 @@ db.exec(`
     view_duration INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS quick_notes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tags TEXT DEFAULT '',
+    processed INTEGER DEFAULT 0,
+    memory_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME
+  );
 `);
 
 // Create indexes for view_history
@@ -6496,6 +6507,144 @@ app.get('/api/rss/public', (req, res) => {
   } catch (error) {
     console.error('生成公开RSS失败:', error);
     res.status(500).send('生成RSS失败');
+  }
+});
+
+// ==================== Quick Notes (快速收集) ====================
+
+// 创建快速笔记
+app.post('/api/quick-notes', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { content, tags } = req.body;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: '内容不能为空' });
+  }
+
+  try {
+    const id = uuidv4();
+    db.prepare(`
+      INSERT INTO quick_notes (id, user_id, content, tags)
+      VALUES (?, ?, ?, ?)
+    `).run(id, userId, content.trim(), tags || '');
+
+    const note = db.prepare('SELECT * FROM quick_notes WHERE id = ?').get(id);
+    res.status(201).json({ message: '已保存到收集箱', note });
+  } catch (error) {
+    console.error('创建快速笔记错误:', error);
+    res.status(500).json({ error: '保存失败' });
+  }
+});
+
+// 获取快速笔记列表
+app.get('/api/quick-notes', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const processed = req.query.processed;
+
+  try {
+    let query = 'SELECT * FROM quick_notes WHERE user_id = ?';
+    const params = [userId];
+
+    if (processed !== undefined) {
+      query += ' AND processed = ?';
+      params.push(processed === 'true' ? 1 : 0);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT 100';
+
+    const notes = db.prepare(query).all(...params);
+    res.json({ notes });
+  } catch (error) {
+    console.error('获取快速笔记错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 获取未处理的快速笔记数量
+app.get('/api/quick-notes/count', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const result = db.prepare(`
+      SELECT COUNT(*) as count FROM quick_notes 
+      WHERE user_id = ? AND processed = 0
+    `).get(userId);
+    res.json({ count: result.count });
+  } catch (error) {
+    console.error('获取快速笔记数量错误:', error);
+    res.status(500).json({ error: '获取失败' });
+  }
+});
+
+// 将快速笔记转为正式记忆
+app.post('/api/quick-notes/:id/convert', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const noteId = req.params.id;
+  const { title, content, tags, visibility } = req.body;
+
+  try {
+    const note = db.prepare('SELECT * FROM quick_notes WHERE id = ? AND user_id = ?').get(noteId, userId);
+    if (!note) {
+      return res.status(404).json({ error: '笔记不存在' });
+    }
+
+    // 创建记忆
+    const memoryId = uuidv4();
+    db.prepare(`
+      INSERT INTO memories (id, user_id, title, content, tags, visibility)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(memoryId, userId, title || '无标题', content || note.content, tags || note.tags, visibility || 'public');
+
+    // 标记笔记为已处理
+    db.prepare(`
+      UPDATE quick_notes SET processed = 1, memory_id = ?, processed_at = CURRENT_TIMESTAMP 
+      WHERE id = ?
+    `).run(memoryId, noteId);
+
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId);
+    res.json({ message: '已转为记忆', memory });
+  } catch (error) {
+    console.error('转换快速笔记错误:', error);
+    res.status(500).json({ error: '转换失败' });
+  }
+});
+
+// 删除快速笔记
+app.delete('/api/quick-notes/:id', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const noteId = req.params.id;
+
+  try {
+    const result = db.prepare('DELETE FROM quick_notes WHERE id = ? AND user_id = ?').run(noteId, userId);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: '笔记不存在' });
+    }
+    res.json({ message: '已删除' });
+  } catch (error) {
+    console.error('删除快速笔记错误:', error);
+    res.status(500).json({ error: '删除失败' });
+  }
+});
+
+// 批量删除快速笔记
+app.post('/api/quick-notes/batch-delete', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const { noteIds } = req.body;
+
+  if (!noteIds || !Array.isArray(noteIds) || noteIds.length === 0) {
+    return res.status(400).json({ error: '请提供笔记ID列表' });
+  }
+
+  try {
+    const placeholders = noteIds.map(() => '?').join(',');
+    const result = db.prepare(`
+      DELETE FROM quick_notes WHERE id IN (${placeholders}) AND user_id = ?
+    `).run(...noteIds, userId);
+
+    res.json({ message: `已删除 ${result.changes} 条笔记` });
+  } catch (error) {
+    console.error('批量删除快速笔记错误:', error);
+    res.status(500).json({ error: '删除失败' });
   }
 });
 
