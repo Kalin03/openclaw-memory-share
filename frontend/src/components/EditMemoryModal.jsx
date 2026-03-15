@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag, Globe, Lock, Users, Link2 } from 'lucide-react';
+import { X, FileText, Tag, Globe, Lock, Users, Link2, Wand2 } from 'lucide-react';
 import ReferenceInput from './ReferenceInput';
+import AIWritingAssistant from './AIWritingAssistant';
 
 const visibilityOptions = [
   { value: 'public', label: '公开', icon: Globe, description: '所有人可见' },
@@ -14,6 +15,7 @@ const EditMemoryModal = ({ memory, onClose }) => {
   const { updateMemory } = useMemories();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
   const textareaRef = useRef(null);
   const [formData, setFormData] = useState({
     title: memory?.title || '',
@@ -89,9 +91,19 @@ const EditMemoryModal = ({ memory, onClose }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              内容（支持Markdown）
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium text-gray-700">
+                内容（支持Markdown）
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowAIAssistant(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 transition-colors"
+              >
+                <Wand2 size={14} />
+                AI 助手
+              </button>
+            </div>
             <textarea
               ref={textareaRef}
               className="input-flat min-h-[200px] font-mono"
@@ -176,6 +188,15 @@ const EditMemoryModal = ({ memory, onClose }) => {
           </div>
         </form>
       </div>
+
+      {/* AI Writing Assistant */}
+      {showAIAssistant && (
+        <AIWritingAssistant
+          content={formData.content}
+          onApply={(newContent) => setFormData({...formData, content: newContent})}
+          onClose={() => setShowAIAssistant(false)}
+        />
+      )}
     </div>
   );
 };

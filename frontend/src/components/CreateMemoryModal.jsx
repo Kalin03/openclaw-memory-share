@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMemories } from '../context/MemoriesContext';
 import { useToast } from '../context/ToastContext';
-import { X, FileText, Tag, Save, Globe, Lock, Users, Layout, Link2, Sparkles } from 'lucide-react';
+import { X, FileText, Tag, Save, Globe, Lock, Users, Layout, Link2, Sparkles, Wand2 } from 'lucide-react';
 import MemoryTemplates, { memoryTemplates } from './MemoryTemplates';
 import ReferenceInput from './ReferenceInput';
+import AIWritingAssistant from './AIWritingAssistant';
 import { recommendTags } from '../utils/tagRecommender';
 
 const DRAFT_KEY = 'memory-share-draft';
@@ -23,6 +24,7 @@ const CreateMemoryModal = ({ onClose }) => {
   const [hasDraft, setHasDraft] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('blank');
   const [showTemplates, setShowTemplates] = useState(true);
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
   const textareaRef = useRef(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -208,9 +210,19 @@ const CreateMemoryModal = ({ onClose }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-              内容（支持Markdown）
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                内容（支持Markdown）
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowAIAssistant(true)}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 transition-colors"
+              >
+                <Wand2 size={14} />
+                AI 助手
+              </button>
+            </div>
             <textarea
               ref={textareaRef}
               className="input-flat min-h-[200px] font-mono"
@@ -334,6 +346,15 @@ const CreateMemoryModal = ({ onClose }) => {
           </div>
         </form>
       </div>
+
+      {/* AI Writing Assistant */}
+      {showAIAssistant && (
+        <AIWritingAssistant
+          content={formData.content}
+          onApply={(newContent) => setFormData({...formData, content: newContent})}
+          onClose={() => setShowAIAssistant(false)}
+        />
+      )}
     </div>
   );
 };
