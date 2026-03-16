@@ -28,7 +28,8 @@ import {
   Webhook,
   Sliders,
   Upload,
-  BookOpen
+  BookOpen,
+  FolderOpen
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -51,6 +52,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'hot', icon: Flame, label: '热门记忆', shortcut: 'H', action: () => onNavigate('hot'), category: '浏览' },
       { id: 'calendar', icon: Calendar, label: '记忆日历', shortcut: 'C', action: () => onNavigate('calendar'), category: '浏览' },
       { id: 'bookmarks', icon: Bookmark, label: '我的收藏', shortcut: 'B', action: () => onNavigate('bookmarks'), category: '我的' },
+      { id: 'collections', icon: FolderOpen, label: '收藏夹管理', action: () => onNavigate('collections'), category: '我的' },
       { id: 'read-later', icon: Clock, label: '稍后阅读', shortcut: 'R', action: () => onNavigate('read-later'), category: '我的' },
       { id: 'archives', icon: Archive, label: '已归档', shortcut: 'A', action: () => onNavigate('archives'), category: '我的' },
       { id: 'trash', icon: Trash2, label: '回收站', shortcut: 'T', action: () => onNavigate('trash'), category: '我的' },
