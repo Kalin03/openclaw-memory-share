@@ -12,6 +12,7 @@ import AddToCollectionModal from './AddToCollectionModal';
 import EmbedContent from './EmbedContent';
 import QRShareModal from './QRShareModal';
 import LockMemoryModal from './LockMemoryModal';
+import QuickShareModal from './QuickShareModal';
 
 const API_URL = '/api';
 const BASE_URL = window.location.origin;
@@ -39,6 +40,7 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
   const [shareCopied, setShareCopied] = useState(false);
   const [showQRShare, setShowQRShare] = useState(false);
   const [showLockModal, setShowLockModal] = useState(false);
+  const [showQuickShare, setShowQuickShare] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [showAddToSeries, setShowAddToSeries] = useState(false);
@@ -287,47 +289,8 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
   };
 
   const handleShare = async () => {
-    const shareUrl = `${BASE_URL}/memory/${memory.id}`;
-    
-    // 尝试使用现代 Clipboard API
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        setShareCopied(true);
-        toast.success('分享链接已复制到剪贴板');
-        setTimeout(() => setShareCopied(false), 2000);
-        return;
-      } catch (err) {
-        console.error('Clipboard API 失败:', err);
-      }
-    }
-    
-    // 降级使用传统方法
-    const textArea = document.createElement('textarea');
-    textArea.value = shareUrl;
-    textArea.style.position = 'fixed';
-    textArea.style.left = '0';
-    textArea.style.top = '0';
-    textArea.style.opacity = '0';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    
-    try {
-      const successful = document.execCommand('copy');
-      if (successful) {
-        setShareCopied(true);
-        toast.success('分享链接已复制到剪贴板');
-        setTimeout(() => setShareCopied(false), 2000);
-      } else {
-        toast.error('复制失败，请手动复制链接');
-      }
-    } catch (err) {
-      console.error('复制失败:', err);
-      toast.error('复制失败，请手动复制链接');
-    }
-    
-    document.body.removeChild(textArea);
+    // 显示快捷分享弹窗
+    setShowQuickShare(true);
   };
 
   const handleShowComments = async () => {
@@ -852,6 +815,16 @@ const MemoryCard = ({ memory, onDelete, onEdit, onTagClick, searchQuery, isSelec
             }
           }}
           onClose={() => setShowLockModal(false)}
+        />
+      )}
+      
+      {/* Quick Share Modal */}
+      {showQuickShare && (
+        <QuickShareModal
+          isOpen={showQuickShare}
+          onClose={() => setShowQuickShare(false)}
+          memoryId={memory.id}
+          memoryTitle={memory.title}
         />
       )}
       
