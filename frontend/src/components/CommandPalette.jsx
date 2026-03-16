@@ -34,7 +34,8 @@ import {
   Book,
   GitCompare,
   Download,
-  CheckSquare
+  CheckSquare,
+  Flag
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -60,6 +61,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'version-compare', icon: GitCompare, label: '版本对比', action: () => onNavigate('version-compare'), category: '工具' },
       { id: 'batch-export', icon: Download, label: '批量导出', action: () => onNavigate('batch-export'), category: '工具' },
       { id: 'batch-operations', icon: CheckSquare, label: '批量操作', action: () => onNavigate('batch-operations'), category: '工具' },
+      { id: 'report', icon: Flag, label: '举报内容', action: () => onNavigate('report'), category: '帮助' },
       { id: 'calendar', icon: Calendar, label: '记忆日历', shortcut: 'C', action: () => onNavigate('calendar'), category: '浏览' },
       { id: 'bookmarks', icon: Bookmark, label: '我的收藏', shortcut: 'B', action: () => onNavigate('bookmarks'), category: '我的' },
       { id: 'collections', icon: FolderOpen, label: '收藏夹管理', action: () => onNavigate('collections'), category: '我的' },

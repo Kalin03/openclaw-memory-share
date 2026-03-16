@@ -48,6 +48,7 @@ import ReadingMode from './components/ReadingMode';
 import VersionCompare from './components/VersionCompare';
 import BatchExport from './components/BatchExport';
 import BatchOperationsEnhanced from './components/BatchOperationsEnhanced';
+import ContentReport from './components/ContentReport';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -88,6 +89,8 @@ const Home = () => {
   const [compareVersions, setCompareVersions] = useState([]);
   const [showBatchExport, setShowBatchExport] = useState(false);
   const [showBatchOperations, setShowBatchOperations] = useState(false);
+  const [showContentReport, setShowContentReport] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -245,6 +248,14 @@ const Home = () => {
         } else {
           setIsSelectMode(true);
           showToast('请先选择要操作的记忆', 'info');
+        }
+        break;
+      case 'report':
+        if (memories.length > 0) {
+          setReportTarget({ id: memories[0].id, type: 'memory', title: memories[0].title });
+          setShowContentReport(true);
+        } else {
+          showToast('没有可举报的内容', 'info');
         }
         break;
       case 'reminders':
@@ -893,6 +904,18 @@ const Home = () => {
           setSelectedIds([]);
           setIsSelectMode(false);
         }}
+      />
+      
+      {/* Content Report */}
+      <ContentReport
+        isOpen={showContentReport}
+        onClose={() => {
+          setShowContentReport(false);
+          setReportTarget(null);
+        }}
+        targetId={reportTarget?.id}
+        targetType={reportTarget?.type || 'memory'}
+        targetTitle={reportTarget?.title}
       />
       
       {/* Batch Operations Toolbar */}
