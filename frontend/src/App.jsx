@@ -44,6 +44,7 @@ import SearchExport from './components/SearchExport';
 import ReadingStatsDashboard from './components/ReadingStatsDashboard';
 import CollectionManager from './components/CollectionManager';
 import RecommendationEngine from './components/RecommendationEngine';
+import ReadingMode from './components/ReadingMode';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -79,6 +80,7 @@ const Home = () => {
   const [showReadingStats, setShowReadingStats] = useState(false);
   const [showCollectionManager, setShowCollectionManager] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [readingModeMemory, setReadingModeMemory] = useState(null);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -212,6 +214,13 @@ const Home = () => {
         break;
       case 'recommendations':
         setShowRecommendations(true);
+        break;
+      case 'reading-mode':
+        if (memories.length > 0) {
+          setReadingModeMemory(memories[0]);
+        } else {
+          showToast('没有可阅读的内容', 'info');
+        }
         break;
       case 'reminders':
         setShowReminders(true);
@@ -824,6 +833,13 @@ const Home = () => {
       <RecommendationEngine
         isOpen={showRecommendations}
         onClose={() => setShowRecommendations(false)}
+      />
+      
+      {/* Reading Mode */}
+      <ReadingMode
+        isOpen={!!readingModeMemory}
+        onClose={() => setReadingModeMemory(null)}
+        memory={readingModeMemory}
       />
       
       {/* Batch Operations Toolbar */}
