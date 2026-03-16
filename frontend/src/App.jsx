@@ -46,6 +46,7 @@ import CollectionManager from './components/CollectionManager';
 import RecommendationEngine from './components/RecommendationEngine';
 import ReadingMode from './components/ReadingMode';
 import VersionCompare from './components/VersionCompare';
+import BatchExport from './components/BatchExport';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -84,6 +85,7 @@ const Home = () => {
   const [readingModeMemory, setReadingModeMemory] = useState(null);
   const [showVersionCompare, setShowVersionCompare] = useState(false);
   const [compareVersions, setCompareVersions] = useState([]);
+  const [showBatchExport, setShowBatchExport] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -231,6 +233,9 @@ const Home = () => {
           { content: '这是原始内容\n第二行\n第三行', created_at: '2026-03-15T10:00:00', author: '用户A' },
           { content: '这是修改后的内容\n第二行修改\n第三行\n新增第四行', created_at: '2026-03-16T10:00:00', author: '用户B' }
         ]);
+        break;
+      case 'batch-export':
+        setShowBatchExport(true);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -858,6 +863,14 @@ const Home = () => {
         onClose={() => setShowVersionCompare(false)}
         memoryId={null}
         versions={compareVersions}
+      />
+      
+      {/* Batch Export */}
+      <BatchExport
+        isOpen={showBatchExport}
+        onClose={() => setShowBatchExport(false)}
+        selectedIds={selectedIds}
+        memories={memories}
       />
       
       {/* Batch Operations Toolbar */}
