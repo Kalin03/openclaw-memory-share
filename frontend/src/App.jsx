@@ -47,6 +47,7 @@ import RecommendationEngine from './components/RecommendationEngine';
 import ReadingMode from './components/ReadingMode';
 import VersionCompare from './components/VersionCompare';
 import BatchExport from './components/BatchExport';
+import BatchOperationsEnhanced from './components/BatchOperationsEnhanced';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -86,6 +87,7 @@ const Home = () => {
   const [showVersionCompare, setShowVersionCompare] = useState(false);
   const [compareVersions, setCompareVersions] = useState([]);
   const [showBatchExport, setShowBatchExport] = useState(false);
+  const [showBatchOperations, setShowBatchOperations] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -236,6 +238,14 @@ const Home = () => {
         break;
       case 'batch-export':
         setShowBatchExport(true);
+        break;
+      case 'batch-operations':
+        if (selectedIds.length > 0) {
+          setShowBatchOperations(true);
+        } else {
+          setIsSelectMode(true);
+          showToast('请先选择要操作的记忆', 'info');
+        }
         break;
       case 'reminders':
         setShowReminders(true);
@@ -871,6 +881,18 @@ const Home = () => {
         onClose={() => setShowBatchExport(false)}
         selectedIds={selectedIds}
         memories={memories}
+      />
+      
+      {/* Batch Operations Enhanced */}
+      <BatchOperationsEnhanced
+        isOpen={showBatchOperations}
+        onClose={() => setShowBatchOperations(false)}
+        selectedIds={selectedIds}
+        onOperationComplete={(op) => {
+          fetchMemories(1);
+          setSelectedIds([]);
+          setIsSelectMode(false);
+        }}
       />
       
       {/* Batch Operations Toolbar */}
