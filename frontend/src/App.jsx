@@ -49,6 +49,7 @@ import VersionCompare from './components/VersionCompare';
 import BatchExport from './components/BatchExport';
 import BatchOperationsEnhanced from './components/BatchOperationsEnhanced';
 import ContentReport from './components/ContentReport';
+import VersionHistoryEnhanced from './components/VersionHistoryEnhanced';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -91,6 +92,8 @@ const Home = () => {
   const [showBatchOperations, setShowBatchOperations] = useState(false);
   const [showContentReport, setShowContentReport] = useState(false);
   const [reportTarget, setReportTarget] = useState(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [versionHistoryMemory, setVersionHistoryMemory] = useState(null);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -256,6 +259,14 @@ const Home = () => {
           setShowContentReport(true);
         } else {
           showToast('没有可举报的内容', 'info');
+        }
+        break;
+      case 'version-history':
+        if (memories.length > 0) {
+          setVersionHistoryMemory(memories[0]);
+          setShowVersionHistory(true);
+        } else {
+          showToast('没有可查看的记忆', 'info');
         }
         break;
       case 'reminders':
@@ -916,6 +927,20 @@ const Home = () => {
         targetId={reportTarget?.id}
         targetType={reportTarget?.type || 'memory'}
         targetTitle={reportTarget?.title}
+      />
+      
+      {/* Version History Enhanced */}
+      <VersionHistoryEnhanced
+        isOpen={showVersionHistory}
+        onClose={() => {
+          setShowVersionHistory(false);
+          setVersionHistoryMemory(null);
+        }}
+        memoryId={versionHistoryMemory?.id}
+        currentContent={versionHistoryMemory?.content}
+        onRestore={(content) => {
+          fetchMemories(1);
+        }}
       />
       
       {/* Batch Operations Toolbar */}
