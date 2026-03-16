@@ -51,6 +51,7 @@ import BatchOperationsEnhanced from './components/BatchOperationsEnhanced';
 import ContentReport from './components/ContentReport';
 import VersionHistoryEnhanced from './components/VersionHistoryEnhanced';
 import ContentModerationDashboard from './components/ContentModerationDashboard';
+import UserBanManagement from './components/UserBanManagement';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -96,6 +97,7 @@ const Home = () => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [versionHistoryMemory, setVersionHistoryMemory] = useState(null);
   const [showModeration, setShowModeration] = useState(false);
+  const [showUserBan, setShowUserBan] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -273,6 +275,9 @@ const Home = () => {
         break;
       case 'moderation':
         setShowModeration(true);
+        break;
+      case 'user-ban':
+        setShowUserBan(true);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -952,6 +957,12 @@ const Home = () => {
       <ContentModerationDashboard
         isOpen={showModeration}
         onClose={() => setShowModeration(false)}
+      />
+      
+      {/* User Ban Management */}
+      <UserBanManagement
+        isOpen={showUserBan}
+        onClose={() => setShowUserBan(false)}
       />
       
       {/* Batch Operations Toolbar */}
