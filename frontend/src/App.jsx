@@ -53,6 +53,7 @@ import VersionHistoryEnhanced from './components/VersionHistoryEnhanced';
 import ContentModerationDashboard from './components/ContentModerationDashboard';
 import UserBanManagement from './components/UserBanManagement';
 import AnnouncementManager from './components/AnnouncementManager';
+import StatisticsCharts from './components/StatisticsCharts';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -100,6 +101,7 @@ const Home = () => {
   const [showModeration, setShowModeration] = useState(false);
   const [showUserBan, setShowUserBan] = useState(false);
   const [showAnnouncements, setShowAnnouncements] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -283,6 +285,9 @@ const Home = () => {
         break;
       case 'announcements':
         setShowAnnouncements(true);
+        break;
+      case 'statistics':
+        setShowStatistics(true);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -974,6 +979,12 @@ const Home = () => {
       <AnnouncementManager
         isOpen={showAnnouncements}
         onClose={() => setShowAnnouncements(false)}
+      />
+      
+      {/* Statistics Charts */}
+      <StatisticsCharts
+        isOpen={showStatistics}
+        onClose={() => setShowStatistics(false)}
       />
       
       {/* Batch Operations Toolbar */}

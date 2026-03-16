@@ -70,6 +70,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'moderation', icon: Shield, label: '内容审核', action: () => onNavigate('moderation'), category: '管理' },
       { id: 'user-ban', icon: UserX, label: '用户封禁管理', action: () => onNavigate('user-ban'), category: '管理' },
       { id: 'announcements', icon: Megaphone, label: '系统公告管理', action: () => onNavigate('announcements'), category: '管理' },
+      { id: 'statistics', icon: BarChart3, label: '数据统计图表', action: () => onNavigate('statistics'), category: '管理' },
       { id: 'calendar', icon: Calendar, label: '记忆日历', shortcut: 'C', action: () => onNavigate('calendar'), category: '浏览' },
       { id: 'bookmarks', icon: Bookmark, label: '我的收藏', shortcut: 'B', action: () => onNavigate('bookmarks'), category: '我的' },
       { id: 'collections', icon: FolderOpen, label: '收藏夹管理', action: () => onNavigate('collections'), category: '我的' },

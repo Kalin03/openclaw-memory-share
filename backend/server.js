@@ -2902,6 +2902,140 @@ app.put('/api/user/password', authMiddleware, async (req, res) => {
   }
 });
 
+// Admin statistics API
+app.get('/api/admin/statistics', (req, res) => {
+  const { range = 'week' } = req.query;
+
+  try {
+    // Overview statistics
+    const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get();
+    const totalMemories = db.prepare('SELECT COUNT(*) as count FROM memories WHERE deleted_at IS NULL').get();
+    const totalViews = db.prepare('SELECT COALESCE(SUM(views_count), 0) as total FROM memories WHERE deleted_at IS NULL').get();
+    const totalLikes = db.prepare('SELECT COUNT(*) as count FROM likes').get();
+
+    // Calculate date range for growth
+    const now = new Date();
+    let startDate;
+    if (range === 'week') {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (range === 'month') {
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else {
+      startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    }
+    const startDateStr = startDate.toISOString().split('T')[0];
+
+    // Previous period for comparison
+    const prevStartDate = new Date(startDate.getTime() - (now.getTime() - startDate.getTime()));
+    const prevStartDateStr = prevStartDate.toISOString().split('T')[0];
+
+    // Growth calculations
+    const newUsers = db.prepare('SELECT COUNT(*) as count FROM users WHERE created_at >= ?').get(startDateStr);
+    const prevUsers = db.prepare('SELECT COUNT(*) as count FROM users WHERE created_at >= ? AND created_at < ?').get(prevStartDateStr, startDateStr);
+    const usersGrowth = prevUsers.count > 0 ? ((newUsers.count - prevUsers.count) / prevUsers.count * 100).toFixed(1) : 0;
+
+    const newMemories = db.prepare('SELECT COUNT(*) as count FROM memories WHERE created_at >= ? AND deleted_at IS NULL').get(startDateStr);
+    const prevMemories = db.prepare('SELECT COUNT(*) as count FROM memories WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL').get(prevStartDateStr, startDateStr);
+    const memoriesGrowth = prevMemories.count > 0 ? ((newMemories.count - prevMemories.count) / prevMemories.count * 100).toFixed(1) : 0;
+
+    // Daily data for charts
+    const days = range === 'week' ? 7 : range === 'month' ? 30 : 12;
+    const dailyData = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const dateLabel = date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+
+      const dayUsers = db.prepare('SELECT COUNT(*) as count FROM users WHERE date(created_at) = ?').get(dateStr);
+      const dayMemories = db.prepare('SELECT COUNT(*) as count FROM memories WHERE date(created_at) = ? AND deleted_at IS NULL').get(dateStr);
+      const dayViews = db.prepare('SELECT COALESCE(SUM(views_count), 0) as total FROM memories WHERE date(created_at) = ? AND deleted_at IS NULL').get(dateStr);
+
+      dailyData.push({
+        date: dateLabel,
+        users: dayUsers?.count || 0,
+        memories: dayMemories?.count || 0,
+        views: dayViews?.total || 0
+      });
+    }
+
+    // Top categories (based on tags from memories table)
+    const memoriesWithTags = db.prepare(`
+      SELECT tags FROM memories 
+      WHERE tags IS NOT NULL AND tags != '' AND deleted_at IS NULL
+    `).all();
+    
+    // Parse tags and count
+    const tagCounts = {};
+    memoriesWithTags.forEach(m => {
+      if (m.tags) {
+        m.tags.split(',').forEach(tag => {
+          const trimmed = tag.trim();
+          if (trimmed) {
+            tagCounts[trimmed] = (tagCounts[trimmed] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    // Sort and get top 5
+    const sortedTags = Object.entries(tagCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+    
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+    const categoriesWithColors = sortedTags.map(([name, count], i) => ({
+      name,
+      count,
+      color: colors[i] || '#6B7280'
+    }));
+
+    // Active users
+    const activeUsers = db.prepare(`
+      SELECT u.username, 
+        COUNT(DISTINCT m.id) as posts,
+        (SELECT COUNT(*) FROM likes WHERE memory_id IN (SELECT id FROM memories WHERE user_id = u.id)) as likes
+      FROM users u
+      LEFT JOIN memories m ON u.id = m.user_id AND m.deleted_at IS NULL
+      WHERE m.created_at >= ?
+      GROUP BY u.id
+      ORDER BY posts DESC
+      LIMIT 5
+    `).all(startDateStr);
+
+    // Calculate views growth
+    const periodViews = db.prepare('SELECT COALESCE(SUM(views_count), 0) as total FROM memories WHERE created_at >= ? AND deleted_at IS NULL').get(startDateStr);
+    const prevViews = db.prepare('SELECT COALESCE(SUM(views_count), 0) as total FROM memories WHERE created_at >= ? AND created_at < ? AND deleted_at IS NULL').get(prevStartDateStr, startDateStr);
+    const viewsGrowth = prevViews.total > 0 ? ((periodViews.total - prevViews.total) / prevViews.total * 100).toFixed(1) : 0;
+
+    // Calculate likes growth
+    const periodLikes = db.prepare('SELECT COUNT(*) as count FROM likes WHERE created_at >= ?').get(startDateStr);
+    const prevLikes = db.prepare('SELECT COUNT(*) as count FROM likes WHERE created_at >= ? AND created_at < ?').get(prevStartDateStr, startDateStr);
+    const likesGrowth = prevLikes.count > 0 ? ((periodLikes.count - prevLikes.count) / prevLikes.count * 100).toFixed(1) : 0;
+
+    res.json({
+      overview: {
+        totalUsers: totalUsers.count,
+        totalMemories: totalMemories.count,
+        totalViews: totalViews.total || 0,
+        totalLikes: totalLikes.count
+      },
+      growth: {
+        usersGrowth: parseFloat(usersGrowth),
+        memoriesGrowth: parseFloat(memoriesGrowth),
+        viewsGrowth: parseFloat(viewsGrowth),
+        likesGrowth: parseFloat(likesGrowth)
+      },
+      dailyData,
+      topCategories: categoriesWithColors,
+      activeUsers
+    });
+  } catch (error) {
+    console.error('获取统计数据错误:', error);
+    res.status(500).json({ error: '获取统计数据失败' });
+  }
+});
+
 // Admin reset password
 app.post('/api/admin/reset-password', async (req, res) => {
   const { adminKey, username, newPassword } = req.body;
