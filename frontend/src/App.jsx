@@ -40,12 +40,13 @@ import UserPreferences from './components/UserPreferences';
 import ImportExternalContent from './components/ImportExternalContent';
 import ProductTour, { useProductTour } from './components/ProductTour';
 import QuickNoteWidget from './components/QuickNoteWidget';
+import SearchExport from './components/SearchExport';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckSquare, Square, Keyboard, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Clock, Flame, Loader2, Users, CheckSquare, Square, Keyboard, Calendar, Download } from 'lucide-react';
 
 const Home = () => {
   const { loading: authLoading, user } = useAuth();
@@ -71,6 +72,7 @@ const Home = () => {
   const [showWebhooks, setShowWebhooks] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showSearchExport, setShowSearchExport] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -518,12 +520,21 @@ const Home = () => {
                     <Search size={20} />
                     <span>搜索 "{searchQuery}" 的结果：{memories.length} 条</span>
                   </div>
-                  <button
-                    onClick={() => navigate('/')}
-                    className="text-primary hover:underline"
-                  >
-                    清除搜索
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowSearchExport(true)}
+                      className="flex items-center gap-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                    >
+                      <Download size={16} />
+                      <span>导出</span>
+                    </button>
+                    <button
+                      onClick={() => navigate('/')}
+                      className="text-primary hover:underline"
+                    >
+                      清除搜索
+                    </button>
+                  </div>
                 </div>
                 {/* Advanced Search Filter */}
                 <AdvancedSearchFilter
@@ -772,6 +783,15 @@ const Home = () => {
       
       {/* Quick Note Widget */}
       <QuickNoteWidget />
+      
+      {/* Search Export Modal */}
+      <SearchExport
+        isOpen={showSearchExport}
+        onClose={() => setShowSearchExport(false)}
+        searchQuery={searchQuery}
+        filters={searchFilters}
+        resultCount={memories.length}
+      />
       
       {/* Batch Operations Toolbar */}
       {isSelectMode && selectedIds.length > 0 && (
