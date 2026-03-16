@@ -52,6 +52,7 @@ import ContentReport from './components/ContentReport';
 import VersionHistoryEnhanced from './components/VersionHistoryEnhanced';
 import ContentModerationDashboard from './components/ContentModerationDashboard';
 import UserBanManagement from './components/UserBanManagement';
+import AnnouncementManager from './components/AnnouncementManager';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -98,6 +99,7 @@ const Home = () => {
   const [versionHistoryMemory, setVersionHistoryMemory] = useState(null);
   const [showModeration, setShowModeration] = useState(false);
   const [showUserBan, setShowUserBan] = useState(false);
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -278,6 +280,9 @@ const Home = () => {
         break;
       case 'user-ban':
         setShowUserBan(true);
+        break;
+      case 'announcements':
+        setShowAnnouncements(true);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -963,6 +968,12 @@ const Home = () => {
       <UserBanManagement
         isOpen={showUserBan}
         onClose={() => setShowUserBan(false)}
+      />
+      
+      {/* Announcement Manager */}
+      <AnnouncementManager
+        isOpen={showAnnouncements}
+        onClose={() => setShowAnnouncements(false)}
       />
       
       {/* Batch Operations Toolbar */}
