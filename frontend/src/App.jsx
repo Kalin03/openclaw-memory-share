@@ -43,6 +43,7 @@ import QuickNoteWidget from './components/QuickNoteWidget';
 import SearchExport from './components/SearchExport';
 import ReadingStatsDashboard from './components/ReadingStatsDashboard';
 import CollectionManager from './components/CollectionManager';
+import RecommendationEngine from './components/RecommendationEngine';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -77,6 +78,7 @@ const Home = () => {
   const [showSearchExport, setShowSearchExport] = useState(false);
   const [showReadingStats, setShowReadingStats] = useState(false);
   const [showCollectionManager, setShowCollectionManager] = useState(false);
+  const [showRecommendations, setShowRecommendations] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -207,6 +209,9 @@ const Home = () => {
         break;
       case 'collections':
         setShowCollectionManager(true);
+        break;
+      case 'recommendations':
+        setShowRecommendations(true);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -813,6 +818,12 @@ const Home = () => {
       <CollectionManager
         isOpen={showCollectionManager}
         onClose={() => setShowCollectionManager(false)}
+      />
+      
+      {/* Recommendation Engine */}
+      <RecommendationEngine
+        isOpen={showRecommendations}
+        onClose={() => setShowRecommendations(false)}
       />
       
       {/* Batch Operations Toolbar */}

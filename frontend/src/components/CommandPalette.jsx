@@ -29,7 +29,8 @@ import {
   Sliders,
   Upload,
   BookOpen,
-  FolderOpen
+  FolderOpen,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -50,6 +51,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'quick-capture', icon: Inbox, label: '快速收集', shortcut: 'Q', action: () => onNavigate('quick-capture'), category: '内容' },
       { id: 'search', icon: Search, label: '搜索记忆', shortcut: '/', action: () => onNavigate('search'), category: '内容' },
       { id: 'hot', icon: Flame, label: '热门记忆', shortcut: 'H', action: () => onNavigate('hot'), category: '浏览' },
+      { id: 'recommendations', icon: Sparkles, label: '智能推荐', action: () => onNavigate('recommendations'), category: '浏览' },
       { id: 'calendar', icon: Calendar, label: '记忆日历', shortcut: 'C', action: () => onNavigate('calendar'), category: '浏览' },
       { id: 'bookmarks', icon: Bookmark, label: '我的收藏', shortcut: 'B', action: () => onNavigate('bookmarks'), category: '我的' },
       { id: 'collections', icon: FolderOpen, label: '收藏夹管理', action: () => onNavigate('collections'), category: '我的' },
