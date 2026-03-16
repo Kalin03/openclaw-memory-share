@@ -45,6 +45,7 @@ import ReadingStatsDashboard from './components/ReadingStatsDashboard';
 import CollectionManager from './components/CollectionManager';
 import RecommendationEngine from './components/RecommendationEngine';
 import ReadingMode from './components/ReadingMode';
+import VersionCompare from './components/VersionCompare';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -81,6 +82,8 @@ const Home = () => {
   const [showCollectionManager, setShowCollectionManager] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [readingModeMemory, setReadingModeMemory] = useState(null);
+  const [showVersionCompare, setShowVersionCompare] = useState(false);
+  const [compareVersions, setCompareVersions] = useState([]);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -221,6 +224,13 @@ const Home = () => {
         } else {
           showToast('没有可阅读的内容', 'info');
         }
+        break;
+      case 'version-compare':
+        setShowVersionCompare(true);
+        setCompareVersions([
+          { content: '这是原始内容\n第二行\n第三行', created_at: '2026-03-15T10:00:00', author: '用户A' },
+          { content: '这是修改后的内容\n第二行修改\n第三行\n新增第四行', created_at: '2026-03-16T10:00:00', author: '用户B' }
+        ]);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -840,6 +850,14 @@ const Home = () => {
         isOpen={!!readingModeMemory}
         onClose={() => setReadingModeMemory(null)}
         memory={readingModeMemory}
+      />
+      
+      {/* Version Compare */}
+      <VersionCompare
+        isOpen={showVersionCompare}
+        onClose={() => setShowVersionCompare(false)}
+        memoryId={null}
+        versions={compareVersions}
       />
       
       {/* Batch Operations Toolbar */}

@@ -31,7 +31,8 @@ import {
   BookOpen,
   FolderOpen,
   Sparkles,
-  Book
+  Book,
+  GitCompare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -54,6 +55,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'hot', icon: Flame, label: '热门记忆', shortcut: 'H', action: () => onNavigate('hot'), category: '浏览' },
       { id: 'recommendations', icon: Sparkles, label: '智能推荐', action: () => onNavigate('recommendations'), category: '浏览' },
       { id: 'reading-mode', icon: Book, label: '阅读模式', action: () => onNavigate('reading-mode'), category: '浏览' },
+      { id: 'version-compare', icon: GitCompare, label: '版本对比', action: () => onNavigate('version-compare'), category: '工具' },
       { id: 'calendar', icon: Calendar, label: '记忆日历', shortcut: 'C', action: () => onNavigate('calendar'), category: '浏览' },
       { id: 'bookmarks', icon: Bookmark, label: '我的收藏', shortcut: 'B', action: () => onNavigate('bookmarks'), category: '我的' },
       { id: 'collections', icon: FolderOpen, label: '收藏夹管理', action: () => onNavigate('collections'), category: '我的' },
