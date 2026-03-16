@@ -50,6 +50,7 @@ import BatchExport from './components/BatchExport';
 import BatchOperationsEnhanced from './components/BatchOperationsEnhanced';
 import ContentReport from './components/ContentReport';
 import VersionHistoryEnhanced from './components/VersionHistoryEnhanced';
+import ContentModerationDashboard from './components/ContentModerationDashboard';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -94,6 +95,7 @@ const Home = () => {
   const [reportTarget, setReportTarget] = useState(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [versionHistoryMemory, setVersionHistoryMemory] = useState(null);
+  const [showModeration, setShowModeration] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -268,6 +270,9 @@ const Home = () => {
         } else {
           showToast('没有可查看的记忆', 'info');
         }
+        break;
+      case 'moderation':
+        setShowModeration(true);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -941,6 +946,12 @@ const Home = () => {
         onRestore={(content) => {
           fetchMemories(1);
         }}
+      />
+      
+      {/* Content Moderation Dashboard */}
+      <ContentModerationDashboard
+        isOpen={showModeration}
+        onClose={() => setShowModeration(false)}
       />
       
       {/* Batch Operations Toolbar */}
