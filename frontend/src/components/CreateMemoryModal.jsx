@@ -6,6 +6,7 @@ import { X, FileText, Tag, Save, Globe, Lock, Users, Layout, Link2, Sparkles, Wa
 import MemoryTemplates, { memoryTemplates } from './MemoryTemplates';
 import ReferenceInput from './ReferenceInput';
 import AIWritingAssistant from './AIWritingAssistant';
+import SmartTagExtractor from './SmartTagExtractor';
 import { recommendTags } from '../utils/tagRecommender';
 
 const DRAFT_KEY = 'memory-share-draft';
@@ -243,10 +244,17 @@ const CreateMemoryModal = ({ onClose }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-              <Tag className="inline w-4 h-4 mr-1" />
-              标签（逗号分隔）
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                <Tag className="inline w-4 h-4 mr-1" />
+                标签（逗号分隔）
+              </label>
+              <SmartTagExtractor 
+                content={formData.content}
+                existingTags={formData.tags.split(',').map(t => t.trim()).filter(Boolean)}
+                onTagsAdd={(tags) => setFormData({...formData, tags: tags.join(', ')})}
+              />
+            </div>
             <input
               type="text"
               className="input-flat"
