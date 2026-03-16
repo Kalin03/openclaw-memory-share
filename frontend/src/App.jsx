@@ -41,6 +41,7 @@ import ImportExternalContent from './components/ImportExternalContent';
 import ProductTour, { useProductTour } from './components/ProductTour';
 import QuickNoteWidget from './components/QuickNoteWidget';
 import SearchExport from './components/SearchExport';
+import ReadingStatsDashboard from './components/ReadingStatsDashboard';
 import { useKeyboardShortcuts, ShortcutsHelp } from './components/KeyboardShortcuts';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MemoriesProvider, useMemories } from './context/MemoriesContext';
@@ -73,6 +74,7 @@ const Home = () => {
   const [showPreferences, setShowPreferences] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showSearchExport, setShowSearchExport] = useState(false);
+  const [showReadingStats, setShowReadingStats] = useState(false);
   const [reminderMemory, setReminderMemory] = useState(null);
   const [editingMemory, setEditingMemory] = useState(null);
   const [activeTab, setActiveTab] = useState('latest');
@@ -197,6 +199,9 @@ const Home = () => {
         break;
       case 'stats':
         setShowProfileModal(true);
+        break;
+      case 'reading-stats':
+        setShowReadingStats(true);
         break;
       case 'reminders':
         setShowReminders(true);
@@ -791,6 +796,12 @@ const Home = () => {
         searchQuery={searchQuery}
         filters={searchFilters}
         resultCount={memories.length}
+      />
+      
+      {/* Reading Stats Dashboard */}
+      <ReadingStatsDashboard
+        isOpen={showReadingStats}
+        onClose={() => setShowReadingStats(false)}
       />
       
       {/* Batch Operations Toolbar */}

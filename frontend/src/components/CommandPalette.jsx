@@ -27,7 +27,8 @@ import {
   Link,
   Webhook,
   Sliders,
-  Upload
+  Upload,
+  BookOpen
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -62,6 +63,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }) => {
       { id: 'moments', icon: Users, label: '沸点', shortcut: 'M', action: () => onNavigate('moments'), category: '社区' },
       { id: 'tags', icon: Tag, label: '标签管理', shortcut: 'G', action: () => onNavigate('tags'), category: '管理' },
       { id: 'stats', icon: BarChart3, label: '数据统计', shortcut: 'S', action: () => onNavigate('stats'), category: '管理' },
+      { id: 'reading-stats', icon: BookOpen, label: '阅读统计', action: () => onNavigate('reading-stats'), category: '管理' },
       { id: 'reminders', icon: Bell, label: '我的提醒', action: () => onNavigate('reminders'), category: '管理' },
       { id: 'graph', icon: Globe, label: '记忆图谱', action: () => onNavigate('graph'), category: '浏览' },
       // 设置
