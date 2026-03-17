@@ -13,7 +13,8 @@ import {
   Loader2,
   Users,
   Tag,
-  FileText
+  FileText,
+  Copy
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import BatchTagEditor from './BatchTagEditor';
@@ -124,6 +125,23 @@ const BatchOperationsToolbar = ({
       onComplete();
     } catch (error) {
       error(error.response?.data?.error || '取消收藏失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBatchCopy = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.post('/api/memories/copy', {
+        memoryIds: selectedIds,
+        openForEdit: false
+      });
+      success(res.data.message);
+      onClearSelection();
+      onComplete();
+    } catch (err) {
+      error(err.response?.data?.error || '复制失败');
     } finally {
       setLoading(false);
     }
@@ -344,6 +362,18 @@ const BatchOperationsToolbar = ({
           >
             <FileText size={16} />
             <span className="hidden sm:inline">PDF</span>
+          </button>
+
+          {/* Copy */}
+          <button
+            onClick={handleBatchCopy}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white 
+                       hover:bg-white/20 transition-colors disabled:opacity-50"
+            title="批量复制"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Copy size={16} />}
+            <span className="hidden sm:inline">复制</span>
           </button>
         </div>
 

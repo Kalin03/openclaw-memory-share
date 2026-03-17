@@ -1879,6 +1879,70 @@ app.post('/api/memories/batch/details', authMiddleware, (req, res) => {
   }
 });
 
+// Copy memories
+app.post('/api/memories/copy', authMiddleware, (req, res) => {
+  const { memoryIds, openForEdit } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供要复制的记忆ID列表' });
+  }
+
+  if (memoryIds.length > 50) {
+    return res.status(400).json({ error: '一次最多复制50条记忆' });
+  }
+
+  try {
+    // Get memories to copy
+    const memories = db.prepare(`
+      SELECT * FROM memories 
+      WHERE id IN (${memoryIds.map(() => '?').join(',')}) 
+      AND (user_id = ? OR visibility = 'public')
+      AND deleted_at IS NULL
+    `).all(...memoryIds, userId);
+
+    if (memories.length === 0) {
+      return res.status(404).json({ error: '未找到可复制的记忆' });
+    }
+
+    const copiedMemories = [];
+    const insertStmt = db.prepare(`
+      INSERT INTO memories (id, user_id, title, content, tags, visibility, likes_count, bookmarks_count, comments_count, views_count, is_pinned, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+
+    for (const memory of memories) {
+      const newId = uuidv4();
+      const newTitle = memory.title ? `${memory.title} (副本)` : '无标题 (副本)';
+      
+      insertStmt.run(
+        newId,
+        userId,
+        newTitle,
+        memory.content,
+        memory.tags,
+        'private' // 复制的记忆默认为私密
+      );
+
+      copiedMemories.push({
+        id: newId,
+        title: newTitle,
+        content: memory.content,
+        tags: memory.tags
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `成功复制 ${copiedMemories.length} 条记忆`,
+      memories: copiedMemories
+    });
+  } catch (error) {
+    console.error('复制记忆错误:', error);
+    res.status(500).json({ error: '复制记忆失败' });
+  }
+});
+
 // ==================== End Batch Operations ====================
 
 // Toggle like
