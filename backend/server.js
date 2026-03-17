@@ -1712,6 +1712,142 @@ app.post('/api/memories/batch/visibility', authMiddleware, (req, res) => {
   }
 });
 
+// Batch tag preview
+app.post('/api/memories/batch-tags/preview', authMiddleware, (req, res) => {
+  const { memoryIds, tags, mode, replaceFrom, replaceTo } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供记忆ID列表' });
+  }
+
+  try {
+    // Get current tags for selected memories
+    const memories = db.prepare(`
+      SELECT id, tags FROM memories 
+      WHERE id IN (${memoryIds.map(() => '?').join(',')}) 
+      AND user_id = ? AND deleted_at IS NULL
+    `).all(...memoryIds, userId);
+
+    let affectedCount = memories.length;
+    let changes = '';
+
+    if (mode === 'add') {
+      changes = `将为 ${affectedCount} 条记忆添加 ${tags.length} 个标签`;
+    } else if (mode === 'remove') {
+      // Count how many memories have the tags to remove
+      let hasTags = 0;
+      memories.forEach(m => {
+        if (m.tags) {
+          const currentTags = m.tags.split(',').map(t => t.trim());
+          if (tags.some(t => currentTags.includes(t))) {
+            hasTags++;
+          }
+        }
+      });
+      changes = `将从 ${hasTags} 条记忆中移除指定标签`;
+      affectedCount = hasTags;
+    } else if (mode === 'replace') {
+      // Count how many memories have the tag to replace
+      let hasTag = 0;
+      memories.forEach(m => {
+        if (m.tags && m.tags.includes(replaceFrom)) {
+          hasTag++;
+        }
+      });
+      affectedCount = hasTag;
+      if (replaceTo) {
+        changes = `将把 ${hasTag} 条记忆中的 "${replaceFrom}" 替换为 "${replaceTo}"`;
+      } else {
+        changes = `将从 ${hasTag} 条记忆中删除 "${replaceFrom}"`;
+      }
+    }
+
+    res.json({
+      affectedCount,
+      changes,
+      willRemove: mode === 'remove' || (mode === 'replace' && !replaceTo)
+    });
+  } catch (error) {
+    console.error('获取预览错误:', error);
+    res.status(500).json({ error: '获取预览失败' });
+  }
+});
+
+// Batch tag edit
+app.post('/api/memories/batch-tags', authMiddleware, (req, res) => {
+  const { memoryIds, tags, mode, replaceFrom, replaceTo } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供记忆ID列表' });
+  }
+
+  if (memoryIds.length > 100) {
+    return res.status(400).json({ error: '一次最多处理100条记忆' });
+  }
+
+  try {
+    // Get memories that belong to the user
+    const memories = db.prepare(`
+      SELECT id, tags FROM memories 
+      WHERE id IN (${memoryIds.map(() => '?').join(',')}) 
+      AND user_id = ? AND deleted_at IS NULL
+    `).all(...memoryIds, userId);
+
+    if (memories.length === 0) {
+      return res.status(404).json({ error: '未找到可编辑的记忆' });
+    }
+
+    const updateStmt = db.prepare(`
+      UPDATE memories SET tags = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ? AND user_id = ?
+    `);
+
+    let successCount = 0;
+
+    for (const memory of memories) {
+      let newTags = memory.tags ? memory.tags.split(',').map(t => t.trim()).filter(t => t) : [];
+
+      if (mode === 'add') {
+        // Add new tags (avoid duplicates)
+        for (const tag of tags) {
+          if (!newTags.includes(tag)) {
+            newTags.push(tag);
+          }
+        }
+      } else if (mode === 'remove') {
+        // Remove specified tags
+        newTags = newTags.filter(t => !tags.includes(t));
+      } else if (mode === 'replace') {
+        // Replace tag
+        const idx = newTags.indexOf(replaceFrom);
+        if (idx !== -1) {
+          if (replaceTo) {
+            newTags[idx] = replaceTo;
+          } else {
+            newTags.splice(idx, 1);
+          }
+        }
+      }
+
+      const tagsString = newTags.join(',');
+      updateStmt.run(tagsString, memory.id, userId);
+      successCount++;
+    }
+
+    const modeNames = { add: '添加', remove: '删除', replace: '替换' };
+    res.json({
+      success: true,
+      message: `成功为 ${successCount} 条记忆${modeNames[mode]}标签`,
+      successCount
+    });
+  } catch (error) {
+    console.error('批量编辑标签错误:', error);
+    res.status(500).json({ error: '批量编辑标签失败' });
+  }
+});
+
 // ==================== End Batch Operations ====================
 
 // Toggle like

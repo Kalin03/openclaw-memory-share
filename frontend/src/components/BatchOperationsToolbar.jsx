@@ -11,9 +11,11 @@ import {
   CheckSquare,
   Square,
   Loader2,
-  Users
+  Users,
+  Tag
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import BatchTagEditor from './BatchTagEditor';
 import axios from 'axios';
 
 const BatchOperationsToolbar = ({
@@ -26,6 +28,7 @@ const BatchOperationsToolbar = ({
   const [loading, setLoading] = useState(false);
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
+  const [showTagEditor, setShowTagEditor] = useState(false);
   const [series, setSeries] = useState([]);
   const [collections, setCollections] = useState([]);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
@@ -315,6 +318,18 @@ const BatchOperationsToolbar = ({
               </div>
             )}
           </div>
+
+          {/* Tag Editor */}
+          <button
+            onClick={() => setShowTagEditor(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white 
+                       hover:bg-white/20 transition-colors disabled:opacity-50"
+            title="批量编辑标签"
+          >
+            <Tag size={16} />
+            <span className="hidden sm:inline">标签</span>
+          </button>
         </div>
 
         <div className="w-px h-6 bg-white/30" />
@@ -457,6 +472,18 @@ const BatchOperationsToolbar = ({
           </div>
         </div>
       )}
+
+      {/* Batch Tag Editor */}
+      <BatchTagEditor
+        isOpen={showTagEditor}
+        onClose={() => setShowTagEditor(false)}
+        selectedIds={selectedIds}
+        onSuccess={(result) => {
+          success(result.message);
+          onClearSelection();
+          onComplete();
+        }}
+      />
     </>
   );
 };
