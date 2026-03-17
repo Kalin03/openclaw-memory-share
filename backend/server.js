@@ -481,6 +481,14 @@ try {
   // 字段已存在，忽略错误
 }
 
+// 添加颜色标签字段
+try {
+  db.exec(`ALTER TABLE memories ADD COLUMN color TEXT DEFAULT NULL`);
+  console.log('✅ Added color column to memories table');
+} catch (e) {
+  // 字段已存在，忽略错误
+}
+
 console.log('✅ Database initialized at:', DB_PATH);
 
 // 解析记忆内容中的引用 [[memoryId]] 格式
@@ -1371,6 +1379,41 @@ app.delete('/api/memories/:id', authMiddleware, (req, res) => {
   } catch (error) {
     console.error('删除记忆错误:', error);
     res.status(500).json({ error: '删除记忆失败' });
+  }
+});
+
+// Update memory color
+app.patch('/api/memories/:id/color', authMiddleware, (req, res) => {
+  const { color } = req.body;
+  const memoryId = req.params.id;
+  const userId = req.user.id;
+
+  // 验证颜色值
+  const validColors = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'indigo', 'purple', 'pink', 'gray'];
+  if (color !== null && !validColors.includes(color)) {
+    return res.status(400).json({ error: '无效的颜色值' });
+  }
+
+  try {
+    const memory = db.prepare('SELECT * FROM memories WHERE id = ? AND deleted_at IS NULL').get(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: '记忆不存在' });
+    }
+
+    if (memory.user_id !== userId) {
+      return res.status(403).json({ error: '无权修改此记忆' });
+    }
+
+    db.prepare('UPDATE memories SET color = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(color, memoryId);
+
+    res.json({ 
+      success: true, 
+      message: color ? `已设置颜色标签` : '已移除颜色标签',
+      color 
+    });
+  } catch (error) {
+    console.error('更新颜色错误:', error);
+    res.status(500).json({ error: '更新颜色失败' });
   }
 });
 
