@@ -12,10 +12,12 @@ import {
   Square,
   Loader2,
   Users,
-  Tag
+  Tag,
+  FileText
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import BatchTagEditor from './BatchTagEditor';
+import BatchExportPDF from './BatchExportPDF';
 import axios from 'axios';
 
 const BatchOperationsToolbar = ({
@@ -29,6 +31,7 @@ const BatchOperationsToolbar = ({
   const [showSeriesModal, setShowSeriesModal] = useState(false);
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
+  const [showExportPDF, setShowExportPDF] = useState(false);
   const [series, setSeries] = useState([]);
   const [collections, setCollections] = useState([]);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
@@ -330,6 +333,18 @@ const BatchOperationsToolbar = ({
             <Tag size={16} />
             <span className="hidden sm:inline">标签</span>
           </button>
+
+          {/* Export PDF */}
+          <button
+            onClick={() => setShowExportPDF(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white 
+                       hover:bg-white/20 transition-colors disabled:opacity-50"
+            title="导出为PDF"
+          >
+            <FileText size={16} />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
         </div>
 
         <div className="w-px h-6 bg-white/30" />
@@ -483,6 +498,13 @@ const BatchOperationsToolbar = ({
           onClearSelection();
           onComplete();
         }}
+      />
+
+      {/* Batch Export PDF */}
+      <BatchExportPDF
+        isOpen={showExportPDF}
+        onClose={() => setShowExportPDF(false)}
+        selectedIds={selectedIds}
       />
     </>
   );

@@ -1848,6 +1848,37 @@ app.post('/api/memories/batch-tags', authMiddleware, (req, res) => {
   }
 });
 
+// Batch get memory details for export
+app.post('/api/memories/batch/details', authMiddleware, (req, res) => {
+  const { memoryIds } = req.body;
+  const userId = req.user.id;
+
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: '请提供记忆ID列表' });
+  }
+
+  if (memoryIds.length > 100) {
+    return res.status(400).json({ error: '一次最多获取100条记忆' });
+  }
+
+  try {
+    const memories = db.prepare(`
+      SELECT m.*, u.username,
+        m.likes_count, m.views_count, m.comments_count
+      FROM memories m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.id IN (${memoryIds.map(() => '?').join(',')}) 
+      AND (m.user_id = ? OR m.visibility = 'public')
+      AND m.deleted_at IS NULL
+    `).all(...memoryIds, userId);
+
+    res.json({ memories });
+  } catch (error) {
+    console.error('批量获取记忆详情错误:', error);
+    res.status(500).json({ error: '获取记忆详情失败' });
+  }
+});
+
 // ==================== End Batch Operations ====================
 
 // Toggle like
